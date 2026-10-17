@@ -353,14 +353,21 @@ def missing_packages(packages):
     return [p for p in packages if isinstance(p, str) and re.match(r'^[a-z0-9][a-z0-9+._-]*$', p)
             and subprocess.run(['pacman', '-Q', p], capture_output=True).returncode != 0]
 
-def install(widget_id, page=1):
-    """Download a reviewed widget, check it against the index's SHA-256, and put it on the desk."""
+SHA256 = re.compile(r'[0-9a-f]{64}\Z')
+
+def install(widget_id, page=1, shown=''):
+    """Download a reviewed widget and put it on the desk. `shown` is the SHA-256 of the entry the
+    store showed the user: the install stops if the catalog changed since, and the download must
+    match it, so what runs is exactly what they looked at."""
     entry = store_entry(widget_id)
     if not entry:
         print(json.dumps({'ok': False, 'error': 'unknown widget'}))
         sys.exit(1)
+    if not SHA256.match(shown or '') or entry.get('sha256') != shown:
+        print(json.dumps({'ok': False, 'error': 'the store changed this widget since you opened it. Look at what it runs now, then add it again'}))
+        sys.exit(1)
     result = subprocess.run(['curl', '-fsSL', '--max-time', '30', STORE + entry['path']], capture_output=True)
-    if result.returncode != 0 or hashlib.sha256(result.stdout).hexdigest() != entry.get('sha256'):
+    if result.returncode != 0 or hashlib.sha256(result.stdout).hexdigest() != shown:
         print(json.dumps({'ok': False, 'error': 'the download did not match the reviewed file'}))
         sys.exit(1)
     folder = WIDGETS / widget_id
@@ -915,7 +922,7 @@ if __name__ == '__main__':
         'init': lambda: init(args[0]),
         'place': lambda: place(args[0], args[1]),
         'store': lambda: store(args == ['force']),
-        'install': lambda: install(args[0], page_arg(3)),
+        'install': lambda: install(args[0], page_arg(3), args[2] if len(args) > 2 else ''),
         'add': lambda: add_builtin(args[0], page_arg(3)),
         'create': lambda: create(args[0], page_arg(3)),
         'move': lambda: move(args[0], page_arg(3)),

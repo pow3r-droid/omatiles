@@ -267,6 +267,16 @@ Scope {
     readonly property var storeWidgets: storeFile.value && storeFile.value.widgets || []
     Owl.OwlHost { id: owlHost; monoFamily: Style.font.family; iconFamily: Style.font.family }
     Process { id: storeFetch; property bool force: false; command: ["python3",root.backend,"store"].concat(force?["force"]:[]); onExited: { storeFile.reload(); compatFile.reload(); } }
+    // A reload can change the widget being looked at: show its new entry, never the old one.
+    // The install is pinned to the SHA-256 on screen, so it can't run something else anyway.
+    onStoreWidgetsChanged: {
+        if (!storePick) return;
+        var id = storePick.id, now = null;
+        for (var i = 0; i < storeWidgets.length; i++) if (storeWidgets[i] && storeWidgets[i].id === id) now = storeWidgets[i];
+        if (now && now.sha256 === storePick.sha256) return;
+        storePick = now;
+        storeMessage = now ? "The store updated this widget just now. Check what it runs again before adding it." : "This widget left the store.";
+    }
     // Per widget: {phone: works only on the phone, missing: packages not installed here}.
     JsonFile { id: compatFile; path: root.cache + "compat.json"; fallback: ({}) }
     function compat(id) { return compatFile.value && compatFile.value[id] || {phone: false, missing: []}; }
@@ -1250,7 +1260,7 @@ Scope {
                             onClicked: {
                                 if (installProc.running) return;
                                 if (root.installed(detail.w.id)) { root.removeTile("owl:" + detail.w.id); root.storeMessage = "Removed. Undo is at the bottom of the desk for a few seconds."; return; }
-                                root.run(installProc, ["install", detail.w.id, String(root.page)]);
+                                root.run(installProc, ["install", detail.w.id, String(root.page), String(detail.w.sha256 || "")]);
                             }
                         }
                         Label { visible: root.storeMessage !== ""; text: root.storeMessage; color: root.ink; font.pixelSize: Style.font.body }

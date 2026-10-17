@@ -177,6 +177,7 @@ class DeskTests(Base):
 
 class InstallTests(Base):
     SOURCE = b'widget "x" {\n size: 4x2\n minSize: 2x1\n}\n'
+    SHA = hashlib.sha256(SOURCE).hexdigest()
 
     def index(self, entries):
         (self.cache / 'store.json').write_text(json.dumps({'widgets': entries}))
@@ -193,7 +194,7 @@ class InstallTests(Base):
                  'requires': {'pacman': ['missingpkg', 'ok', 'Bad Name; x']}}
         self.index([entry])
         self.curl_returns(self.SOURCE)
-        out, code = self.call(backend.install, 'al/clock-x', 1)
+        out, code = self.call(backend.install, 'al/clock-x', 1, self.SHA)
         self.assertIsNone(code)
         self.assertTrue(out['ok'])
         self.assertEqual(out['missing'], ['missingpkg'])
@@ -209,7 +210,7 @@ class InstallTests(Base):
     def test_hash_mismatch_installs_nothing(self):
         self.index([{'id': 'al/clock-x', 'path': 'p.owl', 'sha256': '0' * 64}])
         self.curl_returns(self.SOURCE)
-        out, code = self.call(backend.install, 'al/clock-x')
+        out, code = self.call(backend.install, 'al/clock-x', 1, '0' * 64)
         self.assertEqual(code, 1)
         self.assertFalse(out['ok'])
         self.assertFalse((self.widgets / 'al').exists())
@@ -218,16 +219,27 @@ class InstallTests(Base):
     def test_download_failure_installs_nothing(self):
         self.index([{'id': 'al/clock-x', 'path': 'p.owl', 'sha256': hashlib.sha256(self.SOURCE).hexdigest()}])
         self.curl_returns(self.SOURCE, code=22)
-        out, code = self.call(backend.install, 'al/clock-x')
+        out, code = self.call(backend.install, 'al/clock-x', 1, self.SHA)
         self.assertEqual(code, 1)
         self.assertFalse((self.widgets / 'al').exists())
+
+    def test_install_runs_only_the_entry_the_user_was_shown(self):
+        # The catalog reloaded after the user looked: the cached entry is not the one on screen.
+        self.index([{'id': 'al/clock-x', 'path': 'p.owl', 'sha256': self.SHA}])
+        self.curl_returns(self.SOURCE)
+        for shown in ['', 'f' * 64, self.SHA.upper(), self.SHA + '\n', 'x']:
+            out, code = self.call(backend.install, 'al/clock-x', 1, shown)
+            self.assertEqual(code, 1, repr(shown))
+            self.assertIn('changed this widget', out['error'], repr(shown))
+        self.run_mock.assert_not_called()
+        self.assertFalse(self.widgets.exists())
 
     def test_path_traversal_and_unknown_ids_are_rejected(self):
         evil = ['../../evil', 'a/../../x', '/etc/passwd', 'a/b/c', 'A/b', '', 'a/']
         self.index([{'id': i, 'path': 'p.owl', 'sha256': hashlib.sha256(self.SOURCE).hexdigest()} for i in evil + ['al/real']])
         self.curl_returns(self.SOURCE)
         for widget_id in evil + ['al/missing']:
-            out, code = self.call(backend.install, widget_id)
+            out, code = self.call(backend.install, widget_id, 1, self.SHA)
             self.assertEqual(code, 1, repr(widget_id))
             self.assertEqual(out['error'], 'unknown widget', repr(widget_id))
         self.run_mock.assert_not_called()

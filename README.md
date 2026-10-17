@@ -210,9 +210,11 @@ Everything runs as you. Nothing needs root. The desk runs:
   Local turns run in `~/.cache/omatiles-chat/<agent>`. **terminal** opens the
   interactive CLI, with its usual approvals.
 - **Weather:** [wttr.in](https://wttr.in) for Omarchy's weather location, at most every 30 minutes.
-- **Store:** downloads the store's index (at most hourly). Each widget's files are
-  checked against the index's SHA-256 before install. Store packages a widget
-  needs are listed, never installed for you.
+- **Store:** downloads the store's index (at most hourly). An install is pinned to the
+  SHA-256 of the entry you were shown: if the index changed since, nothing is downloaded,
+  and the file must match that hash. When a reload changes the widget you're looking at,
+  the store shows its new commands. Store packages a widget needs are listed, never
+  installed for you.
 - **New widgets:** Claude Code (Sonnet) writes one OWL file in the widget's own folder,
   and the vendored `owl.jar` checker reviews it. Claude Code runs with only its Read,
   Write and Edit tools, without your Claude settings or MCP servers.

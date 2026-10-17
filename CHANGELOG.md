@@ -2,6 +2,9 @@
 
 ## 2.1.0 (2026-10-17)
 
+- **Store installs run only what you saw:** adding a widget is pinned to the SHA-256 of the entry on screen. If
+  the catalog reloads and changes that widget first, the install stops before downloading, and the store shows
+  the new entry's commands. Reported in the marketplace review.
 - **Pick your tile desktops:** on first run the desk asks which desktops become the dashboard: desktop 1,
   desktops 1–2 or 1–3 (`desks`). The right-click menu changes it later. Tiles on desktops you turn off are kept
   and come back when you turn them on.
