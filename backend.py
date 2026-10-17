@@ -288,19 +288,41 @@ def recent(app):
 # ── Widget store ──────────────────────────────────────────────────────────────
 
 def store(force=False):
-    """Fetch the reviewed widget index, at most hourly unless forced."""
+    """Fetch the reviewed widget index, at most hourly unless forced, then note what works here."""
     CACHE.mkdir(parents=True, exist_ok=True)
     stamp = CACHE / 'store.attempt'
-    if not force and stamp.exists() and time.time() - stamp.stat().st_mtime < 3600 and (CACHE / 'store.json').exists():
-        return
-    stamp.touch()
-    result = curl(STORE + 'index.json')
+    if force or not stamp.exists() or time.time() - stamp.stat().st_mtime >= 3600 or not (CACHE / 'store.json').exists():
+        stamp.touch()
+        result = curl(STORE + 'index.json')
+        try:
+            data = json.loads(result.stdout)
+            assert isinstance(data['widgets'], list)
+            atomic(CACHE / 'store.json', result.stdout)
+        except (ValueError, KeyError, AssertionError, TypeError):
+            pass
+    compat()
+
+PHONE_ONLY = re.compile(r'\bAndroid notifications\b', re.I)
+
+def compat():
+    """Per store widget: whether it only works on the phone (it reads Android notifications,
+    which a desktop doesn't have) and which of its packages are not installed here."""
     try:
-        data = json.loads(result.stdout)
-        assert isinstance(data['widgets'], list)
-    except (ValueError, KeyError, AssertionError, TypeError):
+        widgets = json.loads((CACHE / 'store.json').read_text())['widgets']
+    except (OSError, ValueError, KeyError):
         return
-    atomic(CACHE / 'store.json', result.stdout)
+    try:
+        have = set(subprocess.run(['pacman', '-Qq'], capture_output=True, text=True, timeout=20).stdout.split())
+    except (OSError, subprocess.TimeoutExpired):
+        have = None
+    out = {}
+    for w in widgets if isinstance(widgets, list) else []:
+        if not isinstance(w, dict) or not isinstance(w.get('id'), str):
+            continue
+        packages = (w.get('requires') or {}).get('pacman') or []
+        out[w['id']] = {'phone': any(isinstance(c, str) and PHONE_ONLY.search(c) for c in w.get('commands') or []),
+                        'missing': [p for p in packages if isinstance(p, str) and have is not None and p not in have]}
+    atomic(CACHE / 'compat.json', json.dumps(out))
 
 def store_entry(widget_id):
     if not WIDGET_ID.match(widget_id):

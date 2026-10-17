@@ -21,7 +21,8 @@ OmaTiles is the public release of a desk first built for one machine, renamed fr
   - the desk accent follows the bar's color and is kept at 4.5:1 or better
   - secondary text is lifted to 4.5:1
   - type uses the shell's font tokens, 12 px minimum
-- **Store previews** fall back to the closest theme's screenshot.
+- **Store:** previews fall back to the closest theme's screenshot. Widgets made for the phone (they read Android
+  notifications) are labelled and listed last, and widgets whose packages are missing say which ones.
 - **Calendar** explains how to add a Google OAuth client when there is none.
 - **Settings and data move:**
   - settings to `~/.config/omarchy/omatiles.json`

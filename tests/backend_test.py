@@ -717,6 +717,26 @@ class OpenAppTests(Base):
         _, code = self.call(backend.open_app, 'claude')
         self.assertEqual(code, 1)
 
+class CompatTests(Base):
+    def test_compat_marks_phone_only_widgets_and_missing_packages(self):
+        (self.cache / 'store.json').write_text(json.dumps({'widgets': [
+            {'id': 'a/notes', 'commands': ['read Android notifications (apps, titles and text)'], 'requires': {}},
+            {'id': 'a/feeds', 'commands': ['curl x'], 'requires': {'pacman': ['curl', 'jq']}},
+            {'id': 'a/plain', 'commands': [], 'requires': {'pacman': []}}, 'junk']}))
+        self.sub(done('curl\nbash\n'))
+        backend.compat()
+        c = json.loads((self.cache / 'compat.json').read_text())
+        self.assertEqual(c, {'a/notes': {'phone': True, 'missing': []}, 'a/feeds': {'phone': False, 'missing': ['jq']},
+                             'a/plain': {'phone': False, 'missing': []}})
+
+    def test_store_still_writes_compat_when_the_fetch_is_throttled(self):
+        (self.cache / 'store.json').write_text(json.dumps({'widgets': [{'id': 'a/b', 'requires': {}}]}))
+        (self.cache / 'store.attempt').touch()
+        self.sub(done(''))
+        backend.store()
+        self.assertEqual(json.loads((self.cache / 'compat.json').read_text()), {'a/b': {'phone': False, 'missing': []}})
+        self.assertEqual(self.run_mock.call_args[0][0], ['pacman', '-Qq'])
+
 class MiscTests(Base):
     def test_new_chat_removes_session_and_log(self):
         d = self.cache / 'chat' / 'claude'

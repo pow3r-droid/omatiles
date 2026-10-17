@@ -226,7 +226,11 @@ Scope {
     JsonFile { id: storeFile; path: root.cache + "store.json"; fallback: ({widgets: []}) }
     readonly property var storeWidgets: storeFile.value && storeFile.value.widgets || []
     Owl.OwlHost { id: owlHost; monoFamily: Style.font.family; iconFamily: Style.font.family }
-    Process { id: storeFetch; property bool force: false; command: ["python3",root.backend,"store"].concat(force?["force"]:[]); onExited: storeFile.reload() }
+    Process { id: storeFetch; property bool force: false; command: ["python3",root.backend,"store"].concat(force?["force"]:[]); onExited: { storeFile.reload(); compatFile.reload(); } }
+    // Per widget: {phone: works only on the phone, missing: packages not installed here}.
+    JsonFile { id: compatFile; path: root.cache + "compat.json"; fallback: ({}) }
+    function compat(id) { return compatFile.value && compatFile.value[id] || {phone: false, missing: []}; }
+    function compatLabel(id) { var c = compat(id); return c.phone ? "phone only" : c.missing.length ? "needs " + c.missing.join(", ") : ""; }
     Process {
         id: installProc
         stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.storeMessage = root.installMessage(text) }
@@ -255,11 +259,13 @@ Scope {
         Object.keys(counts).sort().forEach(function(c){ out.push({name: c, n: counts[c]}); });
         return out;
     }
+    // Widgets that only work on the phone go last.
     readonly property var storeShown: storeWidgets.filter(function(w){
         var q = storeQuery.trim().toLowerCase();
         return (storeCategory === "all" || (w.category || "other") === storeCategory)
             && (!q || (w.name + " " + w.description + " " + w.author).toLowerCase().indexOf(q) !== -1);
-    })
+    }).map(function(w, i){ return {w: w, i: i, phone: root.compat(w.id).phone}; })
+      .sort(function(a, b){ return a.phone - b.phone || a.i - b.i; }).map(function(x){ return x.w; })
     // Store previews exist for some themes; show this theme's, else the closest one's.
     readonly property string previewTheme: storeOpen ? themeSlug : ""
     function previewUrl(w) {
@@ -1092,7 +1098,12 @@ Scope {
                                             source: root.storeOpen ? (root.previewTheme, root.themeList, root.previewUrl(modelData)) : ""
                                         }
                                         Text { x: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 26; width: parent.width - 24; elide: Text.ElideRight; text: modelData.name + (root.installed(modelData.id) ? "  " : ""); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title }
-                                        Text { x: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 8; text: (modelData.category || "other") + " · " + modelData.size[0] + "x" + modelData.size[1]; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                                        Text {
+                                            x: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 8; width: parent.width - 24; elide: Text.ElideRight
+                                            readonly property string note: root.compatLabel(modelData.id)
+                                            text: note || (modelData.category || "other") + " · " + modelData.size[0] + "x" + modelData.size[1]
+                                            color: note ? Color.urgent : root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
+                                        }
                                         MouseArea { id: cardMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { root.storePick = modelData; root.storeMessage = ""; } }
                                     }
                                 }
@@ -1112,6 +1123,12 @@ Scope {
                         Text { visible: !!detail.w; width: parent.width; elide: Text.ElideRight; text: detail.w ? detail.w.name : ""; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.display - 4 }
                         Text { visible: !!detail.w; width: parent.width; wrapMode: Text.Wrap; text: detail.w ? detail.w.author + " · v" + detail.w.version + " · " + detail.w.license + " · " + (detail.w.category || "other") + " · " + detail.w.size[0] + "x" + detail.w.size[1] : ""; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
                         Label { visible: !!detail.w; text: detail.w ? detail.w.description : ""; font.pixelSize: Style.font.subtitle }
+                        Label {
+                            readonly property var c: detail.w ? root.compat(detail.w.id) : null
+                            visible: !!c && (c.phone || c.missing.length > 0); color: Color.urgent; font.pixelSize: Style.font.body
+                            text: !c ? "" : c.phone ? "Made for the phone: it reads Android notifications, which a desktop doesn't have, so it stays empty here."
+                                : "Needs " + c.missing.join(", ") + ", not installed here. Install with  omarchy pkg add " + c.missing.join(" ")
+                        }
                         Text { visible: !!detail.w; text: "installs"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.subtitle; topPadding: Style.spacing.md }
                         Label {
                             visible: !!detail.w; font.pixelSize: Style.font.body
