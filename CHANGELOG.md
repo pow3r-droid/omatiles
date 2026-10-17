@@ -2,6 +2,9 @@
 
 ## 2.1.0 (2026-10-17)
 
+- **Chat prompts stay off the command line:** the desk now hands a chat turn, and a widget request for Claude, to
+  the backend over stdin. Before, it was an argument of the waiting backend process, which other local users
+  can read. Reported in the marketplace review.
 - **Store installs run only what you saw:** adding a widget is pinned to the SHA-256 of the entry on screen. If
   the catalog reloads and changes that widget first, the install stops before downloading, and the store shows
   the new entry's commands. Reported in the marketplace review.

@@ -14,6 +14,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
+REAL_RUN = subprocess.run  # the tests mock subprocess.run; the CLI tests need the real one
 spec = importlib.util.spec_from_file_location('backend', ROOT / 'backend.py')
 backend = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(backend)
@@ -581,6 +582,39 @@ class ChatTests(Base):
             self.assertEqual(kwargs['input'], secret, agent)
             self.assertIn('exec ', args[0][2], agent)
             self.assertTrue(self.session_file(agent).read_text(), agent)
+
+    def test_the_cli_reads_a_chat_turn_from_stdin_never_argv(self):
+        # Other local users can read a running process's arguments, so the prompt is never one.
+        home = Path(self.tmp.name) / 'clihome'
+        home.mkdir()
+        env = {'HOME': str(home), 'PATH': '/usr/bin:/bin', 'XDG_CACHE_HOME': str(home / '.cache'),
+               'XDG_CONFIG_HOME': str(home / '.config')}
+        result = REAL_RUN([sys.executable, '-I', '-B', str(ROOT / 'backend.py'), 'ask', 'claude', 'from-argv'],
+                          input=json.dumps('line one\nfrom "stdin"') + '\n', capture_output=True, text=True,
+                          env=env, timeout=60)
+        logs = list(home.rglob('log.json'))
+        self.assertEqual(len(logs), 1, result.stderr)
+        log = json.loads(logs[0].read_text())
+        self.assertEqual(log[0]['text'], 'line one\nfrom "stdin"')
+        self.assertNotIn('from-argv', logs[0].read_text())
+
+    def test_stdin_text_is_one_json_string_line_capped(self):
+        for raw, want in (('"hi\\nthere"\n', 'hi\nthere'), ('not json\n', ''), ('42\n', ''), ('', ''),
+                          (json.dumps('x' * 30000) + '\n', 'x' * backend.TEXT_MAX)):
+            with patch.object(backend.sys, 'stdin', io.StringIO(raw)):
+                self.assertEqual(backend.stdin_text(), want, repr(raw[:20]))
+
+    def test_an_empty_turn_sends_nothing(self):
+        self.write_config({'tiles': {}})
+        _, code = self.call(backend.ask, 'claude', '   ')
+        self.assertEqual(code, 1)
+        self.run_mock.assert_not_called()
+
+    def test_the_desk_sends_private_text_over_stdin(self):
+        qml = (ROOT / 'Service.qml').read_text()
+        self.assertIn('runWith(p, ["ask", agent], text.trim())', qml)
+        self.assertIn('runWith(createProc, ["create", String(root.page)], createInput.text.trim())', qml)
+        self.assertNotRegex(qml, r'run\(\w+, \["(ask|create)", [^\]]*(text|createInput)')
 
     def test_ask_remote_runs_ssh_base_plus_line(self):
         self.write_config({'tiles': {}, 'chat': {'host': 'me@box'}})

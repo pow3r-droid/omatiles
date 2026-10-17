@@ -199,7 +199,9 @@ Everything runs as you. Nothing needs root. The desk runs:
   `pacman -Qq`, `systemctl list-units` for your configured units, `docker ps`
   if present, and `tailscale ip`. It runs locally every minute while the card is on
   screen. On the remote machine it runs once per refresh, over ssh.
-- **Chat tiles:** each turn runs the agent's CLI with the prompt on stdin. No one
+- **Chat tiles:** each turn runs the agent's CLI. The prompt travels on stdin at every
+  step, from the desk to the backend to the CLI, never as a command-line argument, which
+  other local users could read. A widget request for Claude travels the same way. No one
   is there to approve tools, so tools are limited:
   - Claude Code: web search and fetch only (`--tools WebSearch,WebFetch`)
   - Codex: its read-only sandbox (`-s read-only`)

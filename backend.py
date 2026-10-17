@@ -729,6 +729,17 @@ def log_turn(agent, who, text, error=False, detail=''):
         entry['detail'] = detail[:240]
     log_write(agent, log_read(agent) + [entry])
 
+TEXT_MAX = 20000
+
+def stdin_text():
+    """A chat turn or a widget request comes on stdin, as one JSON string line, never on the
+    command line: other local users can read a running process's arguments."""
+    try:
+        text = json.loads(sys.stdin.readline() or '""')
+    except ValueError:
+        return ''
+    return text[:TEXT_MAX] if isinstance(text, str) else ''
+
 def ask(agent, text, retry=False):
     """One chat turn. A retry drops the failed answer and sends the last question again."""
     if agent not in AGENTS:
@@ -745,6 +756,8 @@ def ask(agent, text, retry=False):
         text = log[-1]['text']
         log_write(agent, log)
     else:
+        if not text.strip():
+            sys.exit(1)
         log_turn(agent, 'you', text.strip())
     session = read_session(agent)
     line = wrap(agent, turn_command(agent, session, agents))
@@ -924,7 +937,7 @@ if __name__ == '__main__':
         'store': lambda: store(args == ['force']),
         'install': lambda: install(args[0], page_arg(3), args[2] if len(args) > 2 else ''),
         'add': lambda: add_builtin(args[0], page_arg(3)),
-        'create': lambda: create(args[0], page_arg(3)),
+        'create': lambda: create(stdin_text(), page_arg(2)),
         'move': lambda: move(args[0], page_arg(3)),
         'remove': lambda: remove(args[0]),
         'restore': lambda: restore(args[0]),
@@ -934,7 +947,7 @@ if __name__ == '__main__':
         'unpin': lambda: pin(args[0], False),
         'recent': lambda: recent(args[0]),
         'probe': lambda: probe(args[0]) if args and args[0] in ('local', 'remote') else None,
-        'ask': lambda: ask(args[0], args[1] if len(args) > 1 else '', retry=args[1:] == ['--retry'] or args[2:] == ['--retry']),
+        'ask': lambda: ask(args[0], '', retry=True) if args[1:] == ['--retry'] else ask(args[0], stdin_text()),
         'open': lambda: open_app(args[0]) if args and args[0] in AGENTS else None,
         'new': lambda: new_chat(args[0]),
         'agents': agents_here,

@@ -140,6 +140,13 @@ Scope {
     Process { id: placeProc }
     Process { id: openUrl; property string url; command: ["xdg-open",url] }
     function run(proc, args) { if (proc.running) return false; proc.command = ["python3", root.backend].concat(args); proc.running = true; return true; }
+    // Private text (a chat turn, a widget request) goes over stdin, never argv: other local
+    // users can read a running process's arguments.
+    component InputProcess: Process {
+        property string input: ""
+        onStarted: { if (!stdinEnabled) return; write(JSON.stringify(input) + "\n"); input = ""; stdinEnabled = false; }
+    }
+    function runWith(proc, args, input) { if (proc.running) return false; proc.input = input; proc.stdinEnabled = true; return run(proc, args); }
     function setOption(name, value) { Quickshell.execDetached(["python3", root.backend, "set", name, String(value)]); }
     // Links come from chat replies and calendar events, so only web links open.
     function openLink(url) { if (/^https?:\/\//i.test(url || "") && !openUrl.running) { openUrl.url = url; openUrl.running = true; } }
@@ -286,7 +293,7 @@ Scope {
         stdout: StdioCollector { waitForEnd: true; onStreamFinished: { root.storeMessage = root.installMessage(text); try { if (JSON.parse(text).overlap) root.showStacked(); } catch(e) {} } }
     }
     Process { id: removeProc }
-    Process {
+    InputProcess {
         id: createProc
         stdout: StdioCollector { waitForEnd: true; onStreamFinished: { try { root.createResult = JSON.parse(text); } catch(e) { root.createResult = {ok:false, error:"Claude did not finish"}; } if (root.createResult.overlap) root.showStacked(); } }
     }
@@ -383,16 +390,16 @@ Scope {
     readonly property string chatWhere: config.chat.host ? (config.chat.where || config.chat.host) : "this machine"
     function agentHere(a) { return config.chat.host !== "" || !agentsFile.value || agentsFile.value[a] !== false; }
     function proc(a) { return ({claude: askClaude, codex: askCodex, grok: askGrok, hermes: askHermes})[a] || null; }
-    function send(agent, text) { var p = proc(agent); if (p && text.trim()) run(p, ["ask", agent, text.trim()]); }
+    function send(agent, text) { var p = proc(agent); if (p && text.trim()) runWith(p, ["ask", agent], text.trim()); }
     function retry(agent) { var p = proc(agent); if (p) run(p, ["ask", agent, "--retry"]); }
     function newChat(agent) { if (!proc(agent).running) run(newProc, ["new", agent]); }
     function openTerminal(agent) { run(openAgent, ["open", agent]); }
     // Bumped when a turn or a new chat finishes, so the tiles reread their transcripts.
     property int chatEpoch: 0
-    Process { id: askClaude; onRunningChanged: root.chatEpoch++ }
-    Process { id: askCodex; onRunningChanged: root.chatEpoch++ }
-    Process { id: askGrok; onRunningChanged: root.chatEpoch++ }
-    Process { id: askHermes; onRunningChanged: root.chatEpoch++ }
+    InputProcess { id: askClaude; onRunningChanged: root.chatEpoch++ }
+    InputProcess { id: askCodex; onRunningChanged: root.chatEpoch++ }
+    InputProcess { id: askGrok; onRunningChanged: root.chatEpoch++ }
+    InputProcess { id: askHermes; onRunningChanged: root.chatEpoch++ }
     Process { id: newProc; onExited: root.chatEpoch++ }
     Process { id: openAgent }
 
@@ -1443,7 +1450,7 @@ Scope {
                     Action {
                         width: 200; height: 34; enabled: !createProc.running && createInput.text.trim() !== ""
                         text: createProc.running ? "claude is writing it…" : "create"
-                        onClicked: { root.createResult = null; root.run(createProc, ["create", createInput.text.trim(), String(root.page)]); }
+                        onClicked: { root.createResult = null; root.runWith(createProc, ["create", String(root.page)], createInput.text.trim()); }
                     }
                     Label {
                         visible: !!root.createResult; font.pixelSize: Style.font.body
