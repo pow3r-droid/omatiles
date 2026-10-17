@@ -26,6 +26,14 @@ test('parse falls back to defaults on bad JSON, null and non-objects', () => {
   assert.equal(d.tiles.clock.enabled, true);
 });
 
+test('parse leaves desks unchosen by default and clamps a chosen count to 1-3', () => {
+  assert.equal(config.defaults().desks, 0);
+  const desks = (v) => config.parse(JSON.stringify({desks: v})).desks;
+  assert.equal(desks(1), 1); assert.equal(desks(2), 2); assert.equal(desks(3), 3);
+  assert.equal(desks(9), 3); assert.equal(desks(0), 1); assert.equal(desks(-4), 1); assert.equal(desks(1.6), 2);
+  assert.equal(desks('2'), 0); assert.equal(desks(null), 0); assert.equal(desks(true), 0);
+});
+
 test('parse keeps every default tile on the 16x8 grid', () => {
   for (const [k, t] of Object.entries(config.defaults().tiles)) {
     assert.ok(t.col >= 0 && t.col + t.w <= config.COLS, k);

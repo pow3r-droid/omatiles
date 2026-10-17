@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0 (2026-10-17)
+
+- **Pick your tile desktops:** on first run the desk asks which desktops become the dashboard: desktop 1,
+  desktops 1–2 or 1–3 (`desks`). The right-click menu changes it later. Tiles on desktops you turn off are kept
+  and come back when you turn them on.
+- **Tile desktops stay clear:** a tiled window that opens on one moves to the next desktop, and the view follows
+  it. Floating pop-ups may still open over the tiles.
+- With one tile desktop, the page dots and the send-to-next-desk handle are hidden.
+
 ## 2.0.0 (2026-10-17)
 
 OmaTiles is the public release of a desk first built for one machine, renamed from Grokbot Desktop.

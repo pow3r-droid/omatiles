@@ -4,9 +4,15 @@
 
 *The koi pond is a widget from the store; the rest is built in.*
 
-A tile desk for Omarchy. Workspaces 1, 2 and 3 each get a 16 x 8 grid of tiles
-above an app dock, drawn in your current Omarchy theme and following it when you
-switch themes. It works like the home screen of the Omarchy Android launcher.
+A home screen for Omarchy. Your first desktop, or your first two or three, becomes a
+dashboard: a 16 x 8 grid of tiles above an app dock, drawn in your current Omarchy
+theme and following it when you switch themes. It works like the home screen of the
+Omarchy Android launcher.
+
+Tile desktops stay clear of windows. An app you open on one lands on the next
+desktop, which tiles windows the way Omarchy always does. On first run the desk asks
+how many desktops to use. One suits a laptop screen next to a main monitor, where the
+dashboard is always a glance away.
 
 - **Built-in tiles:** a seven-segment clock in your bar's color, date and weather, sun & moon,
   Google Calendar, a fastfetch-style card for this machine, and an optional card for a
@@ -19,8 +25,9 @@ switch themes. It works like the home screen of the Omarchy Android launcher.
 - **Dock:** your pinned apps, then the ones you used recently. Icons can be tinted in
   the theme's accent color.
 
-The desk sits under your windows. When a tiled window covers it, it stops
-animating and polling.
+Floating pop-ups, like the volume or Wi-Fi panels, can still open over the dashboard.
+If you move a window onto a tile desktop yourself (Super+Shift+1), the desk sits under
+it and stops animating and polling while it's covered.
 
 ## Install
 
@@ -100,6 +107,7 @@ Everything below is optional:
 
 ```json
 {
+  "desks": 1,
   "units": "auto",
   "dockMono": false,
   "dock": ["chromium", "com.mitchellh.ghostty", "obsidian"],
@@ -131,6 +139,9 @@ Everything below is optional:
 }
 ```
 
+- **desks:** how many workspaces, counting from 1, are tile desktops: `1`, `2` or `3`.
+  The desk asks on first run, and the right-click menu changes it. New tiled windows
+  on those workspaces move to the next one. Tiles on desktops you turn off are kept.
 - **units:** `auto` follows your locale, or set `metric` or `imperial`. Times follow
   your locale's 12 or 24 hour clock.
 - **dock:** desktop entry ids, without `.desktop`.

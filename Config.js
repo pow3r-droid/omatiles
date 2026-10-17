@@ -1,5 +1,5 @@
 // The desk config (~/.config/omarchy/omatiles.json): a 16 x 8 grid per page,
-// pages are workspaces 1-3. Built-in tiles have fixed keys; store and
+// pages are workspaces 1 to `desks` (1-3, chosen on first run; 0 = not chosen yet). Built-in tiles have fixed keys; store and
 // Claude-made widgets are "owl:<author>/<name>". Machine and chat settings are
 // optional and only the user's own config holds them.
 var COLS = 16, ROWS = 8, GRID = 16, PAGES = 3;
@@ -9,7 +9,7 @@ var BUILTIN = ['clock', 'local', 'remote', 'calendar', 'weather', 'sun', 'chat-c
 var DOCK = ['chromium', 'com.mitchellh.ghostty', 'Alacritty', 'org.gnome.Nautilus', 'obsidian', 'spotify',
             'signal', 'typora', 'org.gnome.Calculator', 'localsend', 'xournalpp'];
 function defaults() {return {
-    grid:GRID, dockMono:false, menuHint:true, units:'auto',
+    grid:GRID, desks:0, dockMono:false, menuHint:true, units:'auto',
     tiles:{
         clock:{enabled:true,col:0,row:0,w:5,h:4},
         local:{enabled:true,col:5,row:0,w:6,h:4},
@@ -36,6 +36,7 @@ function parse(raw) {
     var base=defaults(), input; try {input=JSON.parse(raw);} catch(e){return base;}
     if(!input || typeof input!=='object') return base;
     ['dockMono','menuHint'].forEach(function(k){ if(typeof input[k]==='boolean') base[k]=input[k]; });
+    if(typeof input.desks==='number' && isFinite(input.desks)) base.desks=clampInt(input.desks,1,PAGES);
     if(['auto','metric','imperial'].indexOf(input.units)!==-1) base.units=input.units;
     if(Array.isArray(input.dock)) base.dock=input.dock.filter(function(d){return typeof d==='string' && d.length>0;}).slice(0,24);
     if(input.local && typeof input.local==='object') base.local.services=services(input.local.services);

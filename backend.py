@@ -42,7 +42,7 @@ def curl(url):
     return subprocess.run(['curl', '--silent', '--fail', '--location', '--max-time', '20', url], capture_output=True, text=True)
 
 # ── Desk layout ───────────────────────────────────────────────────────────────
-# A 16 x 8 grid on each of three pages (workspaces 1-3). Built-in tiles have
+# A 16 x 8 grid on each page: workspaces 1 to 3, as many as the user picks. Built-in tiles have
 # fixed keys; store and Claude-made widgets are "owl:<author>/<name>".
 COLS, ROWS, GRID, PAGES = 16, 8, 16, 3
 AGENTS = ('claude', 'codex', 'grok', 'hermes')
@@ -66,6 +66,11 @@ def load_config():
         config['tiles'] = {}
     config['grid'] = GRID
     return config
+
+def desk_count(config):
+    """How many workspaces, from 1, are tile desks. Unchosen means all three."""
+    n = config.get('desks')
+    return max(1, min(PAGES, n)) if isinstance(n, int) and not isinstance(n, bool) and n > 0 else PAGES
 
 def save_config(config):
     atomic(CONFIG / CONFIG_FILE, json.dumps(config, indent=1))
@@ -128,10 +133,11 @@ def put_on_desk(key, size, page=1, missing=(), least=None):
     w, h = max(1, min(COLS, int(size[0]))), max(1, min(ROWS, int(size[1])))
     least = least or (w, h)
     least = (max(1, min(w, int(least[0]))), max(1, min(h, int(least[1]))))
-    page = max(1, min(PAGES, int(page)))
     with config_lock():
         config = load_config()
-        for p in [page] + [q for q in range(1, PAGES + 1) if q != page]:
+        desks = desk_count(config)
+        page = max(1, min(desks, int(page)))
+        for p in [page] + [q for q in range(1, desks + 1) if q != page]:
             spot = fit(config, w, h, least, p)
             if spot:
                 break
@@ -165,9 +171,9 @@ def owl_folder(key):
 
 def move(key, page):
     """Send a tile to another page, at the first spot it fits there."""
-    page = max(1, min(PAGES, int(page)))
     with config_lock():
         config = load_config()
+        page = max(1, min(desk_count(config), int(page)))
         tile = config['tiles'].get(key)
         if not isinstance(tile, dict) or tile.get('page', 1) == page:
             return
@@ -250,15 +256,16 @@ def prune_trash(days=1):
             if time.time() - slot.stat().st_mtime > days * 86400:
                 shutil.rmtree(slot, ignore_errors=True)
 
-OPTIONS = {'dockMono': bool, 'menuHint': bool}
+OPTIONS = {'dockMono': bool, 'menuHint': bool, 'desks': int}
 
 def set_option(name, value):
-    """Set one of the desk's own switches."""
-    if name not in OPTIONS:
+    """Set one of the desk's own switches, or how many workspaces are desks."""
+    kind = OPTIONS.get(name)
+    if kind is None or (kind is int and not value.isdigit()):
         return
     with config_lock():
         config = load_config()
-        config[name] = value == 'true'
+        config[name] = value == 'true' if kind is bool else max(1, min(PAGES, int(value)))
         save_config(config)
 
 def pin(app, on):

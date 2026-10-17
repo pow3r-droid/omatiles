@@ -124,6 +124,28 @@ class DeskTests(Base):
         self.assertEqual(result, {'ok': False, 'error': 'no room', 'missing': ['jq']})
         self.assertNotIn('owl:a/new', self.tiles())
 
+    def test_desk_count_defaults_to_three_and_clamps(self):
+        for value, want in ((None, 3), (0, 3), (1, 1), (2, 2), (9, 3), (-1, 3), (True, 3), ('2', 3)):
+            self.assertEqual(backend.desk_count({'desks': value}), want, repr(value))
+
+    def test_one_desk_never_spills_onto_workspace_two(self):
+        self.write_config({'desks': 1, 'tiles': {}})
+        # the default tiles fill desk 1, and there is no desk 2 to spill onto
+        self.assertFalse(backend.put_on_desk('owl:a/new', (6, 4), page=3, least=(6, 4))['ok'])
+        self.write_config({'desks': 1, 'tiles': {k: {'enabled': False} for k in ('clock', 'local', 'calendar', 'weather', 'sun')}})
+        result = backend.put_on_desk('owl:a/new', (4, 4), page=3)
+        self.assertEqual((result['ok'], result['page']), (True, 1))
+        self.assertNotIn('page', self.tiles()['owl:a/new'])
+
+    def test_two_desks_use_page_two_but_not_three(self):
+        self.write_config({'desks': 2, 'tiles': {'owl:a/f2': self.fill(2)}})
+        self.assertFalse(backend.put_on_desk('owl:a/new', (4, 4), page=2)['ok'])
+
+    def test_move_stays_within_the_desks(self):
+        self.write_config({'desks': 2, 'tiles': {'owl:a/w': {'enabled': True, 'col': 0, 'row': 0, 'w': 4, 'h': 4, 'page': 2}}})
+        self.call(backend.move, 'owl:a/w', 3)
+        self.assertEqual(self.tiles()['owl:a/w']['page'], 2)
+
 class InstallTests(Base):
     SOURCE = b'widget "x" {\n size: 4x2\n minSize: 2x1\n}\n'
 
@@ -305,6 +327,18 @@ class DockTests(Base):
         self.assertIs(config['menuHint'], False)
         self.assertIsInstance(config['tiles'], dict)
         self.assertNotIn('evil', config)
+
+    def test_set_option_desks_is_a_clamped_number(self):
+        self.write_config({'tiles': {}})
+        backend.set_option('desks', '2')
+        self.assertEqual(self.read_config()['desks'], 2)
+        backend.set_option('desks', '7')
+        self.assertEqual(self.read_config()['desks'], 3)
+        for bad in ('0x1', '-1', 'true', ''):
+            backend.set_option('desks', bad)
+        self.assertEqual(self.read_config()['desks'], 3)
+        backend.set_option('desks', '0')
+        self.assertEqual(self.read_config()['desks'], 1)
 
 PROBE_OUT = '''os=Arch Linux
 who=me@box

@@ -12,8 +12,9 @@ import "calendar/Model.js" as Calendar
 import "owl" as Owl
 import "owl/Owl.js" as OwlJs
 
-// OmaTiles: a tile desk on workspaces 1-3, a 16 x 8 grid per workspace above an
-// app dock, drawn in the active Omarchy theme. Right-click opens its menu.
+// OmaTiles: a home screen on the first workspaces (1, 1-2 or 1-3, picked on first
+// run), a 16 x 8 grid of tiles above an app dock, drawn in the active Omarchy theme.
+// Later workspaces stay ordinary tiling ones. Right-click opens its menu.
 Scope {
     id: root
     readonly property string home: Quickshell.env("HOME")
@@ -28,9 +29,12 @@ Scope {
     property bool browsed: false
 
     // ── Where the desk shows ────────────────────────────────────────────────
-    // Workspaces 1-3 are desk pages: the desk shows on the monitor showing one
-    // of them, with that page's tiles.
-    readonly property int pages: Config.PAGES
+    // Workspaces 1 to `pages` are desk pages: the desk shows on the monitor showing
+    // one of them, with that page's tiles. Until the user picks, all three are.
+    readonly property int pages: config.desks || Config.PAGES
+    readonly property bool choosing: loaded && !config.desks
+    // Tiles kept on desks the user turned off: they come back with those desks.
+    readonly property int hiddenTiles: Object.keys(config.tiles).filter(function(k){ var t = config.tiles[k]; return t.enabled && (t.page || 1) > pages; }).length
     readonly property Item deskItem: desk
     readonly property var deskScreen: {
         var screens = Quickshell.screens;
@@ -53,7 +57,7 @@ Scope {
         target: Hyprland
         function onRawEvent(event) {
             if (/^(openwindow|closewindow|movewindow|changefloatingmode|fullscreen)/.test(event.name)) Hyprland.refreshToplevels();
-            if (event.name === "openwindow") root.noteWindow(event.parse(4)[2] || "");
+            if (event.name === "openwindow") { var w = event.parse(4); root.noteWindow(w[2] || ""); root.keepOff(w[0] || ""); }
         }
     }
     property bool editing: false
@@ -199,6 +203,28 @@ Scope {
         return e && !e.noDisplay ? e : null;
     }
     Process { id: recentProc; onExited: recentFile.reload() }
+    // Tile desktops are locked, like a phone's home screen: a tiled window that
+    // opens on one moves to the first ordinary workspace, and the view follows it.
+    // Floating pop-ups (volume, Wi-Fi…) may stay; they don't cover the tiles.
+    property var opening: []
+    function keepOff(address) {
+        if (!config.desks || !/^(0x)?[0-9a-fA-F]+$/.test(address)) return;
+        opening = opening.concat([address.replace(/^0x/, "")]);
+        Hyprland.refreshToplevels();
+        lockTimer.restart();
+    }
+    Timer {
+        id: lockTimer; interval: 150
+        onTriggered: {
+            var list = root.opening; root.opening = [];
+            Hyprland.toplevels.values.forEach(function(t) {
+                var o = t.lastIpcObject, a = String(t.address).replace(/^0x/, "");
+                if (list.indexOf(a) === -1 || !o || o.floating !== false || !o.workspace) return;
+                if (o.workspace.id >= 1 && o.workspace.id <= root.pages)
+                    Quickshell.execDetached(["hyprctl", "dispatch", "hl.dsp.window.move({ workspace = \"" + (root.pages + 1) + "\", window = \"address:0x" + a + "\" })"]);
+            });
+        }
+    }
     function noteWindow(cls) {
         var e = entryForClass(cls);
         var list = Array.isArray(recentFile.value) ? recentFile.value : [];
@@ -933,7 +959,7 @@ Scope {
                 MouseArea { id: chipMouse; anchors.fill: parent; anchors.margins: -6; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: parent.hit() }
             }
             Chip {
-                visible: root.config.menuHint && !root.editing && !root.menuOpen && !root.storeOpen && !root.createOpen && root.undoKey === ""
+                visible: root.config.menuHint && !root.choosing && !root.editing && !root.menuOpen && !root.storeOpen && !root.createOpen && root.undoKey === ""
                 anchors { horizontalCenter: parent.horizontalCenter; bottom: dock.top; bottomMargin: desk.gap * 2 }
                 ChipText { text: "Right-click the desk for widgets, themes and arranging" }
                 ChipLink { text: ""; onHit: root.setOption("menuHint", false) }
@@ -941,7 +967,7 @@ Scope {
             Chip {
                 visible: root.editing && !root.menuOpen && !root.storeOpen
                 anchors { horizontalCenter: parent.horizontalCenter; bottom: dock.top; bottomMargin: desk.gap * 2 }
-                ChipText { text: (root.focusing ? "Arrows move the tile · Shift+arrows resize · " : "Drag to move · corner to resize · ") + " next desk ·  remove" }
+                ChipText { text: (root.focusing ? "Arrows move the tile · Shift+arrows resize · " : "Drag to move · corner to resize · ") + (root.pages > 1 ? "  N moves it to desk N · " : "") + " remove" }
                 ChipLink { text: "done"; onHit: root.editing = false }
             }
             Chip {
@@ -995,6 +1021,32 @@ Scope {
                                 }
                             }
                         }
+                    }
+                    Item {
+                        width: parent.width; height: 34
+                        Text { x: 8; anchors.verticalCenter: parent.verticalCenter; text: "tile desktops"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.heading - 1 }
+                        Row {
+                            anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                            spacing: Style.spacing.sm
+                            Repeater {
+                                model: [1, 2, 3]
+                                Rectangle {
+                                    required property int modelData
+                                    readonly property bool on: modelData === root.pages
+                                    Accessible.role: Accessible.RadioButton; Accessible.name: "tiles on " + (modelData === 1 ? "desktop 1" : "desktops 1 to " + modelData); Accessible.checked: on
+                                    width: 46; height: 26; radius: Style.cornerRadius
+                                    color: on ? root.ink : (countMouse.containsMouse ? Util.alpha(root.ink, 0.14) : "transparent")
+                                    border.width: 1; border.color: on ? root.ink : Util.alpha(root.ink, 0.4)
+                                    Text { anchors.centerIn: parent; text: modelData === 1 ? "1" : "1–" + modelData; color: parent.on ? Color.background : root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                                    MouseArea { id: countMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setOption("desks", parent.modelData) }
+                                }
+                            }
+                        }
+                    }
+                    Text {
+                        visible: root.hiddenTiles > 0; x: 8; width: parent.width - 16; wrapMode: Text.Wrap
+                        text: root.hiddenTiles + (root.hiddenTiles === 1 ? " tile waits" : " tiles wait") + " on desktops that are off; they come back when you turn them on."
+                        color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
                     }
                     Item {
                         width: parent.width; height: 30
@@ -1257,6 +1309,81 @@ Scope {
                 Keys.onEscapePressed: root.screenWidget.closeScreen()
             }
 
+            // ── First run: which desktops get tiles ─────────────────────────
+            // Like setting a phone's home screen: the first workspaces become the
+            // dashboard, the rest stay ordinary Omarchy workspaces.
+            Rectangle {
+                anchors.fill: parent; z: 60
+                opacity: root.choosing ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                color: Util.alpha(Color.background, 0.7)
+                MouseArea { anchors.fill: parent; acceptedButtons: Qt.LeftButton | Qt.RightButton }
+            }
+            Rectangle {
+                z: 60
+                opacity: root.choosing ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                width: Math.min(760, desk.width - 40); height: chooseCol.implicitHeight + 44
+                anchors.centerIn: parent
+                color: Color.background; border.width: 2; border.color: root.ink; radius: Style.cornerRadius
+                MouseArea { anchors.fill: parent; acceptedButtons: Qt.LeftButton | Qt.RightButton }
+                Column {
+                    id: chooseCol; x: 24; y: 22; width: parent.width - 48; spacing: Style.spacing.xxl
+                    Text { text: "which desktops get tiles?"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading + 4 }
+                    Label {
+                        text: "OmaTiles turns your first desktops into a home screen, like a phone's launcher: a dashboard you glance at. Tile desktops stay clear of windows: apps open on the next desktop, which tiles them as Omarchy always does."
+                        color: Color.foreground; font.pixelSize: Style.font.body + 1
+                    }
+                    Row {
+                        id: chooseRow; width: parent.width; spacing: Style.spacing.xl
+                        property real tallest: 0
+                        Repeater {
+                            model: [{n: 1, t: "desktop 1", d: "One dashboard; apps open from desktop 2. Good on a laptop beside a main screen."},
+                                    {n: 2, t: "desktops 1–2", d: "A dashboard and a page for more widgets or agent chats; apps open from desktop 3."},
+                                    {n: 3, t: "desktops 1–3", d: "Three pages of tiles; apps open from desktop 4."}]
+                            Rectangle {
+                                id: choice
+                                required property var modelData
+                                Accessible.role: Accessible.Button; Accessible.name: "tiles on " + modelData.t
+                                Accessible.onPressAction: root.setOption("desks", modelData.n)
+                                readonly property real needs: choiceCol.implicitHeight + 32
+                                onNeedsChanged: chooseRow.tallest = Math.max(chooseRow.tallest, needs)
+                                Component.onCompleted: chooseRow.tallest = Math.max(chooseRow.tallest, needs)
+                                width: (chooseRow.width - 2 * chooseRow.spacing) / 3; height: Math.max(needs, chooseRow.tallest)
+                                radius: Style.cornerRadius
+                                color: choiceMouse.containsMouse ? Util.alpha(root.ink, 0.14) : Util.alpha(Color.foreground, 0.04)
+                                border.width: choiceMouse.containsMouse ? 2 : 1; border.color: choiceMouse.containsMouse ? root.ink : Util.alpha(root.ink, 0.35)
+                                Column {
+                                    id: choiceCol; x: 16; y: 16; width: parent.width - 32; spacing: Style.spacing.lg
+                                    // Workspaces 1-5: the tile ones filled in the bar's color, the rest outlined.
+                                    Row {
+                                        spacing: Style.spacing.xs
+                                        Repeater {
+                                            model: 5
+                                            Rectangle {
+                                                required property int index
+                                                width: 26; height: 18; radius: 3
+                                                color: index < choice.modelData.n ? root.ink : "transparent"
+                                                border.width: 1; border.color: index < choice.modelData.n ? root.ink : Util.alpha(Color.foreground, 0.35)
+                                                Text { anchors.centerIn: parent; text: index + 1; color: index < choice.modelData.n ? Color.background : root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body - 2 }
+                                            }
+                                        }
+                                    }
+                                    Text { text: choice.modelData.t; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading }
+                                    Label { text: choice.modelData.d; color: root.muted; font.pixelSize: Style.font.body }
+                                }
+                                MouseArea { id: choiceMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setOption("desks", choice.modelData.n) }
+                            }
+                        }
+                    }
+                    Text {
+                        width: parent.width; wrapMode: Text.Wrap
+                        text: "Change it any time from the right-click menu. Tiles on desktops you turn off are kept for when you turn them back on."
+                        color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
+                    }
+                }
+            }
+
             // ── New widget with Claude ──────────────────────────────────────
             Rectangle {
                 anchors.fill: parent; z: 46
@@ -1360,8 +1487,9 @@ Scope {
                     anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
                     spacing: Style.spacing.xxl
                     Text { anchors.verticalCenter: parent.verticalCenter; text: dock.hovered; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
-                    // Which desk (workspace 1-3) this is.
+                    // Which desk page this is, when there is more than one.
                     Row {
+                        visible: root.pages > 1
                         anchors.verticalCenter: parent.verticalCenter; spacing: Style.spacing.sm
                         Repeater {
                             model: root.pages

@@ -94,11 +94,20 @@ Rectangle {
             onReleased: tile.save()
         }
     }
-    // Send to the next desk page (workspace), where it takes the first free spot.
-    Handle {
-        glyph: " " + (desk.page % desk.pages + 1); hot: moveMouse.containsMouse; Accessible.name: "send to desk " + (desk.page % desk.pages + 1)
+    // Send to another desk page (workspace), where it takes the first free spot:
+    // one button per other desk, so any tile reaches any desk in one click.
+    Row {
+        visible: desk.editing && desk.pages > 1
+        spacing: Style.spacing.xs
         anchors { right: closeHandle.left; top: parent.top; topMargin: Style.spacing.sm; rightMargin: Style.spacing.sm }
-        MouseArea { id: moveMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: desk.move(tile.key, desk.page % desk.pages + 1) }
+        Repeater {
+            model: { var o = []; for (var n = 1; n <= desk.pages; n++) if (n !== desk.page) o.push(n); return o; }
+            Handle {
+                required property int modelData
+                glyph: "\uf061 " + modelData; hot: sendMouse.containsMouse; Accessible.name: "send to desk " + modelData
+                MouseArea { id: sendMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: desk.move(tile.key, parent.modelData) }
+            }
+        }
     }
     // Remove: hides a built-in tile, or puts a widget in the trash (the desk offers undo).
     Handle {
