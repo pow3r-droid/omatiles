@@ -30,7 +30,8 @@ OmaTiles is the public release of a desk first built for one machine, renamed fr
 - **Calmer glance:** the clock drops its weather line when the weather tile is on the same desk. The menu, store and
   widget creator fade in.
 - **Widget states:** store widgets say when they're loading, and a widget that fails explains itself before its raw error.
-- **Undo** shows above the store too, so removing from the store can be undone there.
+- **Undo** shows above the store too, so removing from the store can be undone there. Deleting your own widget
+  takes a second click.
 - **Accessibility names** on buttons, fields, dock icons and arrange handles. Calendar controls are 24 px.
 - **Settings and data move:**
   - settings to `~/.config/omarchy/omatiles.json`

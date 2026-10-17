@@ -292,6 +292,9 @@ Scope {
 
     // ── Undo for the last removal ───────────────────────────────────────────
     property string undoKey: ""
+    // A delete waiting for its second click; it lapses after a few seconds.
+    property string confirmKey: ""
+    Timer { id: confirmTimer; interval: 4000; onTriggered: root.confirmKey = "" }
     Timer { id: undoTimer; interval: 10000; onTriggered: root.undoKey = "" }
     function removeTile(key) { if (run(removeProc, ["remove", key])) { undoKey = key; undoTimer.restart(); } }
     function undoRemove() { if (undoKey && run(removeProc, ["restore", undoKey])) { undoKey = ""; undoTimer.stop(); } }
@@ -1100,8 +1103,14 @@ Scope {
                                             MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: root.run(installProc, ["add", localRow.key, String(root.page)]) }
                                         }
                                         Text {
-                                            text: "delete"; color: root.danger; font.family: Style.font.family; font.pixelSize: Style.font.body
-                                            MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: root.removeTile(localRow.key) }
+                                            // Two clicks: the first asks, the second deletes (undo still follows).
+                                            text: root.confirmKey === localRow.key ? "delete it?" : "delete"
+                                            font.bold: root.confirmKey === localRow.key
+                                            color: root.danger; font.family: Style.font.family; font.pixelSize: Style.font.body
+                                            MouseArea {
+                                                anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor
+                                                onClicked: { if (root.confirmKey === localRow.key) { root.confirmKey = ""; root.removeTile(localRow.key); } else { root.confirmKey = localRow.key; confirmTimer.restart(); } }
+                                            }
                                         }
                                     }
                                 }
