@@ -12,6 +12,9 @@
 - **A full desk still takes a new widget:** it goes on the desk you're looking at and, when nothing is free, sits on
   top of the other tiles, drawn solid. Arrange mode opens so you can drag it into place or remove a tile. Sending a
   tile to a full desk works the same way. New widgets no longer spill onto another desk.
+- **Symbol dock icons:** the themed dock is now an icon pack, like a phone's: one Nerd Font symbol per app in the
+  bar's color, not a tint over the real icon. Apps are matched by name, desktop id, icon or menu category. Apps with
+  no symbol show their initial in a circle. `dockSymbols` sets any app's symbol.
 
 ## 2.0.0 (2026-10-17)
 

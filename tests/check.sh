@@ -8,7 +8,7 @@ m=json.loads(Path('manifest.json').read_text())
 assert m['schemaVersion']==1 and m['id']=='io.github.pow3r-droid.omatiles'
 assert m['kinds']==['service'] and m['keepLoaded'] is True
 assert m['entryPoints']=={'service':'Service.qml'}
-for p in ['Service.qml','Tile.qml','SevenSeg.qml','SysInfo.qml','ChatTile.qml','Label.qml','Action.qml','Field.qml','Config.js','Ui.js','backend.py','gcal.py','calendar/Model.js','owl/OwlWidget.qml','owl/Owl.js','owl/LICENSE','README.md','CHANGELOG.md','LICENSE']:
+for p in ['Service.qml','Tile.qml','SevenSeg.qml','SysInfo.qml','ChatTile.qml','Label.qml','Action.qml','Field.qml','Glyphs.js','Config.js','Ui.js','backend.py','gcal.py','calendar/Model.js','owl/OwlWidget.qml','owl/Owl.js','owl/LICENSE','README.md','CHANGELOG.md','LICENSE']:
     assert Path(p).is_file(), p
 readme=Path('README.md').read_text()
 assert 'not affiliated with or endorsed by' in readme

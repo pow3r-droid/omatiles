@@ -22,8 +22,9 @@ dashboard is always a glance away.
 - **Widgets:** the reviewed widgets from the [OWL widget store](https://github.com/SimonSchubert/omarchy-widgets)
   (the same ones the Android launcher uses), plus your own, written by Claude Code
   from one sentence.
-- **Dock:** your pinned apps, then the ones you used recently. Icons can be tinted in
-  the theme's accent color.
+- **Dock:** your pinned apps, then the ones you used recently. Like a phone's themed
+  icon pack, the icons can be one-color symbols in your bar's color, drawn from the
+  Nerd Font Omarchy already uses.
 
 Floating pop-ups, like the volume or Wi-Fi panels, can still open over the dashboard.
 If you move a window onto a tile desktop yourself (Super+Shift+1), the desk sits under
@@ -71,7 +72,7 @@ rm -rf ~/.config/omarchy/omatiles.json ~/.config/omarchy/omatiles ~/.cache/omati
 - **new widget with claude:** describe a widget. Claude Code writes it, the store's
   checker reviews it, and it lands on a free spot.
 - **tile desktops: 1 / 1–2 / 1–3**
-- **dock icons: theme color / full color**
+- **dock icons: symbols / full color**
 - **theme:** switch Omarchy themes from the desk.
 
 New tiles go on the desk you're looking at, shrunk to fit if they need to be. When
@@ -115,6 +116,7 @@ Everything below is optional:
   "desks": 1,
   "units": "auto",
   "dockMono": false,
+  "dockSymbols": {"my-server-app": "f048b"},
   "dock": ["chromium", "com.mitchellh.ghostty", "obsidian"],
 
   "local": {
@@ -150,6 +152,12 @@ Everything below is optional:
 - **units:** `auto` follows your locale, or set `metric` or `imperial`. Times follow
   your locale's 12 or 24 hour clock.
 - **dock:** desktop entry ids, without `.desktop`.
+- **dockMono:** `true` draws the dock as symbols. Common apps have one built in (browsers,
+  terminals, chat apps, editors and more). Others get one from their menu category, or
+  show their initial in a circle.
+- **dockSymbols:** pick the symbol for an app. Use its desktop id or name as the key,
+  and the symbol's code from the [Nerd Fonts cheat sheet](https://www.nerdfonts.com/cheat-sheet)
+  (`f048b` or `U+F048B`), or paste the symbol itself.
 - **local.services and remote.services:** up to six systemd units each, glob patterns
   allowed. `user` defaults to `true` (a `--user` unit); use `false` for system units.
   The card shows how many matching units are running. This machine's card also shows

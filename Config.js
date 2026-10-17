@@ -9,7 +9,7 @@ var BUILTIN = ['clock', 'local', 'remote', 'calendar', 'weather', 'sun', 'chat-c
 var DOCK = ['chromium', 'com.mitchellh.ghostty', 'Alacritty', 'org.gnome.Nautilus', 'obsidian', 'spotify',
             'signal', 'typora', 'org.gnome.Calculator', 'localsend', 'xournalpp'];
 function defaults() {return {
-    grid:GRID, desks:0, dockMono:false, menuHint:true, units:'auto',
+    grid:GRID, desks:0, dockMono:false, dockSymbols:{}, menuHint:true, units:'auto',
     tiles:{
         clock:{enabled:true,col:0,row:0,w:5,h:4},
         local:{enabled:true,col:5,row:0,w:6,h:4},
@@ -38,6 +38,9 @@ function parse(raw) {
     ['dockMono','menuHint'].forEach(function(k){ if(typeof input[k]==='boolean') base[k]=input[k]; });
     if(typeof input.desks==='number' && isFinite(input.desks)) base.desks=clampInt(input.desks,1,PAGES);
     if(['auto','metric','imperial'].indexOf(input.units)!==-1) base.units=input.units;
+    // Per-app symbol overrides: desktop id or app name -> a symbol or its hex code.
+    if(input.dockSymbols && typeof input.dockSymbols==='object' && !Array.isArray(input.dockSymbols))
+        Object.keys(input.dockSymbols).slice(0,64).forEach(function(k){ var v=input.dockSymbols[k]; if(typeof v==='string' && v.length<=12) base.dockSymbols[k]=v; });
     if(Array.isArray(input.dock)) base.dock=input.dock.filter(function(d){return typeof d==='string' && d.length>0;}).slice(0,24);
     if(input.local && typeof input.local==='object') base.local.services=services(input.local.services);
     var r=input.remote;

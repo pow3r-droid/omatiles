@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const calendar = require('../calendar/Model.js');
 const config = require('../Config.js');
+const glyphs = require('../Glyphs.js');
 
 // Ui.js has no exports and uses Qt.rgba / Qt.color: run it in a context with a tiny Qt shim.
 const Qt = {
@@ -261,4 +262,54 @@ test('dayEvents includes multi-day events and respects day edges', () => {
   assert.ok(calendar.onDay(events, 2026, 9, 11));
   assert.ok(!calendar.onDay(events, 2026, 9, 20));
   assert.deepEqual(calendar.dayEvents([], 2026, 9, 1), []);
+});
+
+// ── Glyphs: symbol dock icons ─────────────────────────────────────────────────
+const cp = (s) => s ? 'U+' + s.codePointAt(0).toString(16).toUpperCase() : '';
+test('symbols match apps by name, then id or icon, then category', () => {
+  assert.equal(cp(glyphs.symbol({id: 'chromium', name: 'Chromium'})), 'U+F02AF');
+  assert.equal(cp(glyphs.symbol({id: 'com.mitchellh.ghostty', name: 'Ghostty'})), 'U+F02A0');
+  assert.equal(cp(glyphs.symbol({id: 'org.telegram.desktop', name: 'Telegram Desktop'})), 'U+F1D8');
+  assert.equal(cp(glyphs.symbol({id: 'X', name: 'X'})), 'U+F0B1F');
+  // by icon name when the display name is unknown
+  assert.equal(cp(glyphs.symbol({id: 'my-discord', name: 'Chat app', icon: 'omarchy-discord'})), 'U+F1FF');
+  // by category when nothing names it
+  assert.equal(cp(glyphs.symbol({id: 'zz', name: 'Zzterm', categories: ['System', 'TerminalEmulator']})), 'U+F018D');
+  assert.equal(glyphs.symbol({id: 'zz', name: 'Zz'}), '');
+  assert.equal(glyphs.symbol(null), '');
+});
+
+test('a Chrome web app is not taken for Chromium', () => {
+  const app = {id: 'chrome-nfaecocciihflaoagabpadoaiidbnfek-Default', name: 'Google Antigravity', icon: 'chrome-nfaecocciihflaoagabpadoaiidbnfek-Default'};
+  assert.equal(glyphs.symbol(app), '');
+  assert.equal(cp(glyphs.symbol({id: 'chrome-fmp-Default', name: 'Claude', icon: 'chrome-fmp-Default'})), 'U+F06C4');
+});
+
+test('categories may come as a QML list rather than an array', () => {
+  const list = {length: 2, 0: 'Network', 1: 'WebBrowser'};
+  assert.equal(cp(glyphs.symbol({id: 'zz', name: 'Zz', categories: list})), 'U+F059F');
+});
+
+test('overrides take a symbol or its hex code, by desktop id or name', () => {
+  assert.equal(cp(glyphs.symbol({id: 'Home Server', name: 'Home Server'}, {'Home Server': 'f048b'})), 'U+F048B');
+  assert.equal(cp(glyphs.symbol({id: 'some-bot', name: 'Some Bot'}, {'some-bot': 'U+F0B05'})), 'U+F0B05');
+  assert.equal(glyphs.symbol({id: 'a', name: 'A'}, {a: '\u2605'}), '\u2605');
+  // junk is ignored, and the app's own match still applies
+  for (const bad of ['', 'abc', 'zzzzzzz', '0x1', 5, null]) assert.equal(cp(glyphs.symbol({id: 'chromium', name: 'Chromium'}, {chromium: bad})), 'U+F02AF', String(bad));
+});
+
+test('apps without a symbol show their initial in a circle', () => {
+  assert.equal(cp(glyphs.initial({name: 'Gimme'})), 'U+F0BFF');
+  assert.equal(cp(glyphs.initial({name: 'hermes'})), 'U+F0C02');
+  assert.equal(cp(glyphs.initial({name: 'Antigravity'})), 'U+F0BED');
+  assert.equal(cp(glyphs.initial({name: 'zed'})), 'U+F0C38');
+  assert.equal(cp(glyphs.initial({name: '1Password'})), 'U+F0614');
+  assert.equal(cp(glyphs.initial({})), 'U+F0614');
+});
+
+test('parse keeps symbol overrides as short strings only', () => {
+  const d = config.parse(JSON.stringify({dockSymbols: {a: 'f048b', b: 7, c: 'x'.repeat(40)}})).dockSymbols;
+  assert.deepEqual(d, {a: 'f048b'});
+  assert.deepEqual(config.parse(JSON.stringify({dockSymbols: ['f048b']})).dockSymbols, {});
+  assert.deepEqual(config.defaults().dockSymbols, {});
 });

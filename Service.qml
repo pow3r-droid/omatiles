@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import qs.Commons
 import Quickshell
 import Quickshell.Io
@@ -11,6 +10,7 @@ import "Ui.js" as Ui
 import "calendar/Model.js" as Calendar
 import "owl" as Owl
 import "owl/Owl.js" as OwlJs
+import "Glyphs.js" as Glyphs
 
 // OmaTiles: a home screen on the first workspaces (1, 1-2 or 1-3, picked on first
 // run), a 16 x 8 grid of tiles above an app dock, drawn in the active Omarchy theme.
@@ -1007,7 +1007,7 @@ Scope {
                     Repeater {
                         model: [{t: root.editing ? "done arranging" : "arrange tiles", a: "arrange"},
                                 {t: "widget store", a: "store"}, {t: "new widget with claude", a: "create"},
-                                {t: root.config.dockMono ? "use full-color dock icons" : "use theme-colored dock icons", a: "mono"}]
+                                {t: root.config.dockMono ? "use full-color dock icons" : "use symbol dock icons", a: "mono"}]
                         Rectangle {
                             required property var modelData
                             width: parent.width; height: 34; radius: Style.cornerRadius
@@ -1457,15 +1457,13 @@ Scope {
                     width: 44; height: 44; radius: Style.cornerRadius
                     Accessible.role: Accessible.Button; Accessible.name: app.modelData.name
                     color: appMouse.containsMouse || (root.dockPick && root.dockPick.id === modelData.id) ? Util.alpha(root.ink, 0.18) : "transparent"
-                    Image { id: appIcon; anchors.centerIn: parent; width: 30; height: 30; sourceSize: Qt.size(60,60); source: root.icon(app.modelData); smooth: true; cache: false; visible: !root.config.dockMono }
-                    // Themed icons, like the tablet's: the icon's own light and dark kept as detail,
-                    // its brightest parts exactly the bar's color. Lift the gray first, tint last:
-                    // brightness after the tint would wash the color out toward lemon.
-                    Item {
-                        anchors.fill: appIcon; visible: root.config.dockMono
-                        layer.enabled: visible
-                        layer.effect: MultiEffect { colorization: 1.0; colorizationColor: root.ink }
-                        MultiEffect { anchors.fill: parent; source: appIcon; saturation: -1.0; brightness: 0.25; contrast: 0.3 }
+                    Image { anchors.centerIn: parent; width: 30; height: 30; sourceSize: Qt.size(60,60); source: root.config.dockMono ? "" : root.icon(app.modelData); smooth: true; cache: false; visible: !root.config.dockMono }
+                    // Symbol icons, like the tablet's icon pack: one Nerd Font symbol per app in
+                    // the bar's color; apps without one show their initial in a circle.
+                    Text {
+                        anchors.centerIn: parent; visible: root.config.dockMono
+                        text: root.config.dockMono ? (Glyphs.symbol(app.modelData, root.config.dockSymbols) || Glyphs.initial(app.modelData)) : ""
+                        color: root.ink; font.family: Style.font.family; font.pixelSize: 28
                     }
                     MouseArea {
                         id: appMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
