@@ -19,7 +19,8 @@ Row {
     property bool refreshable: false
     signal refresh()
     function logo(os) {
-        var o = (os || "").toLowerCase();
+        if (!os) return "\uf233";  // not read yet: a plain server
+        var o = os.toLowerCase();
         return o.indexOf("arch") !== -1 || o.indexOf("omarchy") !== -1 ? "" : o.indexOf("debian") !== -1 ? ""
              : o.indexOf("ubuntu") !== -1 ? "" : o.indexOf("fedora") !== -1 ? "" : o.indexOf("nixos") !== -1 ? "" : "";
     }

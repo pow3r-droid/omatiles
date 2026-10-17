@@ -201,10 +201,11 @@ Scope {
         var list = Array.isArray(recentFile.value) ? recentFile.value : [];
         if (e && list[0] !== e.id) run(recentProc, ["recent", e.id]);
     }
-    readonly property var pinnedApps: (themeSlug, config.dock.map(entry).filter(function(e){ return !!e; }))
+    // App entries load after the desk does; reading the list here rebuilds the dock when they arrive.
+    readonly property var pinnedApps: (themeSlug, DesktopEntries.applications.values, config.dock.map(entry).filter(function(e){ return !!e; }))
     readonly property var recentApps: {
         var pinned = config.dock, list = Array.isArray(recentFile.value) ? recentFile.value : [];
-        return (themeSlug, list.filter(function(id){ return pinned.indexOf(id) === -1; }).map(entry).filter(function(e){ return !!e; }));
+        return (themeSlug, DesktopEntries.applications.values, list.filter(function(id){ return pinned.indexOf(id) === -1; }).map(entry).filter(function(e){ return !!e; }));
     }
     property var dockPick: null
     Process { id: pinProc }
@@ -548,7 +549,7 @@ Scope {
                 onActivated: if (r.host) root.refreshRemote()
                 SysInfo {
                     visible: remoteTile.r.host !== ""
-                    machine: remoteTile.m; user: remoteTile.m && remoteTile.m.who ? remoteTile.m.who : remoteTile.r.host
+                    machine: remoteTile.m; user: remoteTile.m && remoteTile.m.who ? remoteTile.m.who : remoteTile.label
                     waiting: remoteFetch.running ? "Checking " + remoteTile.label + "…" : "Not checked yet. Refresh reads " + remoteTile.label + " once over ssh."
                     live: remoteTile.live || remoteFetch.running; ink: root.ink; muted: root.muted
                     services: root.serviceRows(remoteTile.m)
@@ -839,7 +840,7 @@ Scope {
                     ChatTile {
                         id: chatView
                         agent: chatTile.modelData; name: root.agentName(chatTile.modelData); where: root.chatWhere
-                        available: root.agentHere(chatTile.modelData)
+                        available: root.agentHere(chatTile.modelData); readOnly: chatTile.modelData !== "hermes"
                         busy: root.proc(chatTile.modelData).running; epoch: root.chatEpoch; now: root.now; desk: deskItem; ink: root.ink; muted: root.muted
                         onSend: function(text) { root.send(chatTile.modelData, text); }
                         onRetry: root.retry(chatTile.modelData)

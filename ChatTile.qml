@@ -14,6 +14,8 @@ Item {
     property string where: ""
     // false when the agent's CLI is known to be missing on the machine it runs on.
     property bool available: true
+    // Hermes runs with its profile's own tools, so only the others are called read-only.
+    property bool readOnly: true
     property bool busy: false
     property double now: Date.now()
     property double sentAt: 0
@@ -79,7 +81,7 @@ Item {
             Text {
                 visible: chat.log.length === 0 && !chat.busy; width: parent.width; wrapMode: Text.Wrap
                 text: chat.available
-                    ? "Ask " + chat.name + " anything. Turns run read-only " + (chat.where === "this machine" ? "here" : "on " + chat.where) + ". The conversation stays until new chat; terminal opens the full CLI on it."
+                    ? "Ask " + chat.name + " anything. Turns run " + (chat.readOnly ? "read-only " : "with its profile's tools ") + (chat.where === "this machine" ? "here" : "on " + chat.where) + ". The conversation stays until new chat; terminal opens the full CLI on it."
                     : chat.name + " isn't installed here. Install its CLI, or set chat.host in omatiles.json to run it on another machine."
                 color: chat.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
             }
