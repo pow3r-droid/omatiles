@@ -87,6 +87,7 @@ def place(tile, geometry):
         config = load_config()
         g = json.loads(geometry)
         entry = config['tiles'].setdefault(tile, {'enabled': True})
+        entry.pop('top', None)  # placed by hand: no longer stacked on top
         for key in ('col', 'row', 'w', 'h'):
             if isinstance(g.get(key), (int, float)) and g[key] >= 0:
                 entry[key] = int(g[key])
@@ -128,28 +129,32 @@ def fit(config, w, h, least, page):
             return spot + (a, b)
     return None
 
+def on_top(w, h):
+    """Where a tile goes when the page has no room: centered, over the others."""
+    return ((COLS - w) // 2, (ROWS - h) // 2, w, h)
+
 def put_on_desk(key, size, page=1, missing=(), least=None):
-    """Place a tile on this page, shrunk to fit if need be, else on the next page with room."""
+    """Place a tile on this page, shrunk to fit if need be. With no room it sits on
+    top of the others (marked `top`), so the user can drag it or remove a tile."""
     w, h = max(1, min(COLS, int(size[0]))), max(1, min(ROWS, int(size[1])))
     least = least or (w, h)
     least = (max(1, min(w, int(least[0]))), max(1, min(h, int(least[1]))))
     with config_lock():
         config = load_config()
         desks = desk_count(config)
-        page = max(1, min(desks, int(page)))
-        for p in [page] + [q for q in range(1, desks + 1) if q != page]:
-            spot = fit(config, w, h, least, p)
-            if spot:
-                break
+        p = max(1, min(desks, int(page)))
+        spot = fit(config, w, h, least, p)
+        tile = {'enabled': True, 'col': 0, 'row': 0, 'w': w, 'h': h}
+        if spot:
+            tile.update(col=spot[0], row=spot[1], w=spot[2], h=spot[3])
         else:
-            return {'ok': False, 'error': 'no room', 'missing': list(missing)}
-        tile = {'enabled': True, 'col': spot[0], 'row': spot[1], 'w': spot[2], 'h': spot[3]}
+            tile.update(zip(('col', 'row', 'w', 'h'), on_top(w, h)), top=True)
         if p != 1:
             tile['page'] = p
         config['tiles'][key] = tile
         save_config(config)
-    return {'ok': True, 'missing': list(missing), 'page': p, 'w': spot[2], 'h': spot[3],
-            'shrunk': (spot[2], spot[3]) != (w, h)}
+    return {'ok': True, 'missing': list(missing), 'page': p, 'w': tile['w'], 'h': tile['h'],
+            'shrunk': (tile['w'], tile['h']) != (w, h), 'overlap': not spot}
 
 def owl_sizes(source):
     """A widget's `size:` and `minSize:`; without a minSize it may shrink to half."""
@@ -170,7 +175,7 @@ def owl_folder(key):
     return WIDGETS / key[4:] if key.startswith('owl:') and WIDGET_ID.match(key[4:]) else None
 
 def move(key, page):
-    """Send a tile to another page, at the first spot it fits there."""
+    """Send a tile to another page, at the first spot it fits there, else on top."""
     with config_lock():
         config = load_config()
         page = max(1, min(desk_count(config), int(page)))
@@ -183,10 +188,11 @@ def move(key, page):
         sizes = widget_size(folder) if folder else None
         least = sizes[1] if sizes else BUILTIN_MIN.get(key, (max(2, w // 2), max(2, h // 2)))
         spot = fit(config, w, h, (min(w, least[0]), min(h, least[1])), page)
-        if not spot:
-            print(json.dumps({'ok': False, 'error': 'no room'}))
-            return
-        tile.update(col=spot[0], row=spot[1], w=spot[2], h=spot[3])
+        tile.pop('top', None)
+        if spot:
+            tile.update(col=spot[0], row=spot[1], w=spot[2], h=spot[3])
+        else:
+            tile.update(zip(('col', 'row', 'w', 'h'), on_top(w, h)), top=True)
         if page == 1:
             tile.pop('page', None)
         else:

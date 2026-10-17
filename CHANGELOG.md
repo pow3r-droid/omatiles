@@ -7,7 +7,11 @@
   and come back when you turn them on.
 - **Tile desktops stay clear:** a tiled window that opens on one moves to the next desktop, and the view follows
   it. Floating pop-ups may still open over the tiles.
-- With one tile desktop, the page dots and the send-to-next-desk handle are hidden.
+- **Send a tile to any desk:** arrange mode shows one button per other desk, so any tile reaches any desk in one
+  click. With one tile desktop, the page dots and the send buttons are hidden.
+- **A full desk still takes a new widget:** it goes on the desk you're looking at and, when nothing is free, sits on
+  top of the other tiles, drawn solid. Arrange mode opens so you can drag it into place or remove a tile. Sending a
+  tile to a full desk works the same way. New widgets no longer spill onto another desk.
 
 ## 2.0.0 (2026-10-17)
 

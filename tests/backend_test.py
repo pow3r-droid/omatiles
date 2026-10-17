@@ -101,28 +101,35 @@ class DeskTests(Base):
         self.assertEqual((result['ok'], result['page'], result['w'], result['h'], result['shrunk']), (True, 2, 4, 2, True))
         self.assertEqual(self.tiles()['owl:a/new'], {'enabled': True, 'col': 0, 'row': 6, 'w': 4, 'h': 2, 'page': 2})
 
-    def test_does_not_shrink_below_least(self):
-        self.write_config({'tiles': {'owl:a/fill': {'enabled': True, 'page': 2, 'col': 0, 'row': 0, 'w': 16, 'h': 7},
-                                     'owl:a/f3': self.fill(3)}})
+    def test_no_room_even_shrunk_goes_on_top_at_full_size(self):
+        self.write_config({'tiles': {'owl:a/fill': {'enabled': True, 'page': 2, 'col': 0, 'row': 0, 'w': 16, 'h': 7}}})
         result = backend.put_on_desk('owl:a/new', (4, 4), page=2, least=(4, 4))
-        self.assertFalse(result['ok'])
-        self.assertNotIn('owl:a/new', self.tiles())
+        self.assertEqual((result['ok'], result['page'], result['overlap'], result['shrunk']), (True, 2, True, False))
+        self.assertEqual(self.tiles()['owl:a/new'], {'enabled': True, 'col': 6, 'row': 2, 'w': 4, 'h': 4, 'page': 2, 'top': True})
 
-    def test_full_page_uses_next_page_and_page_one_has_no_page_key(self):
+
+    def test_full_page_stays_on_this_page_and_page_one_has_no_page_key(self):
         self.write_config({'tiles': {'owl:a/fill': self.fill(2)}})
         result = backend.put_on_desk('owl:a/new', (4, 4), page=2)
-        self.assertEqual((result['ok'], result['page'], result['shrunk']), (True, 3, False))
-        self.assertEqual(self.tiles()['owl:a/new']['page'], 3)
+        self.assertEqual((result['ok'], result['page'], result['overlap']), (True, 2, True))
         self.write_config({'tiles': {k: {'enabled': False} for k in ('clock', 'local', 'calendar', 'weather', 'sun')}})
         result = backend.put_on_desk('owl:a/p1', (4, 4), page=1)
-        self.assertEqual(result['page'], 1)
+        self.assertEqual((result['page'], result['overlap']), (1, False))
         self.assertNotIn('page', self.tiles()['owl:a/p1'])
+        self.assertNotIn('top', self.tiles()['owl:a/p1'])
 
-    def test_all_pages_full_returns_not_ok(self):
+
+    def test_a_full_desk_still_takes_the_widget(self):
         self.write_config({'tiles': {'owl:a/f2': self.fill(2), 'owl:a/f3': self.fill(3)}})
         result = backend.put_on_desk('owl:a/new', (4, 4), page=1, missing=['jq'])
-        self.assertEqual(result, {'ok': False, 'error': 'no room', 'missing': ['jq']})
-        self.assertNotIn('owl:a/new', self.tiles())
+        self.assertEqual((result['ok'], result['page'], result['overlap'], result['missing']), (True, 1, True, ['jq']))
+        self.assertIs(self.tiles()['owl:a/new']['top'], True)
+
+    def test_dragging_a_stacked_tile_clears_top(self):
+        self.write_config({'tiles': {'owl:a/new': {'enabled': True, 'col': 6, 'row': 2, 'w': 4, 'h': 4, 'top': True}}})
+        backend.place('owl:a/new', json.dumps({'col': 0, 'row': 0}))
+        self.assertNotIn('top', self.tiles()['owl:a/new'])
+
 
     def test_desk_count_defaults_to_three_and_clamps(self):
         for value, want in ((None, 3), (0, 3), (1, 1), (2, 2), (9, 3), (-1, 3), (True, 3), ('2', 3)):
@@ -130,16 +137,21 @@ class DeskTests(Base):
 
     def test_one_desk_never_spills_onto_workspace_two(self):
         self.write_config({'desks': 1, 'tiles': {}})
-        # the default tiles fill desk 1, and there is no desk 2 to spill onto
-        self.assertFalse(backend.put_on_desk('owl:a/new', (6, 4), page=3, least=(6, 4))['ok'])
-        self.write_config({'desks': 1, 'tiles': {k: {'enabled': False} for k in ('clock', 'local', 'calendar', 'weather', 'sun')}})
-        result = backend.put_on_desk('owl:a/new', (4, 4), page=3)
-        self.assertEqual((result['ok'], result['page']), (True, 1))
+        # the default tiles fill desk 1, and there is no desk 2: it goes on top of desk 1
+        result = backend.put_on_desk('owl:a/new', (6, 4), page=3, least=(6, 4))
+        self.assertEqual((result['ok'], result['page'], result['overlap']), (True, 1, True))
         self.assertNotIn('page', self.tiles()['owl:a/new'])
 
+
     def test_two_desks_use_page_two_but_not_three(self):
-        self.write_config({'desks': 2, 'tiles': {'owl:a/f2': self.fill(2)}})
-        self.assertFalse(backend.put_on_desk('owl:a/new', (4, 4), page=2)['ok'])
+        self.write_config({'desks': 2, 'tiles': {}})
+        self.assertEqual(backend.put_on_desk('owl:a/new', (4, 4), page=3)['page'], 2)
+
+
+    def test_move_to_a_full_desk_goes_on_top(self):
+        self.write_config({'tiles': {'owl:a/w': {'enabled': True, 'col': 0, 'row': 0, 'w': 4, 'h': 4, 'page': 2}}})
+        self.call(backend.move, 'owl:a/w', 1)
+        self.assertEqual(self.tiles()['owl:a/w'], {'enabled': True, 'col': 6, 'row': 2, 'w': 4, 'h': 4, 'top': True})
 
     def test_move_stays_within_the_desks(self):
         self.write_config({'desks': 2, 'tiles': {'owl:a/w': {'enabled': True, 'col': 0, 'row': 0, 'w': 4, 'h': 4, 'page': 2}}})

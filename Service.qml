@@ -266,25 +266,28 @@ Scope {
     function compatLabel(id) { var c = compat(id); return c.phone ? "phone only" : c.missing.length ? "needs " + c.missing.join(", ") : ""; }
     Process {
         id: installProc
-        stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.storeMessage = root.installMessage(text) }
+        stdout: StdioCollector { waitForEnd: true; onStreamFinished: { root.storeMessage = root.installMessage(text); try { if (JSON.parse(text).overlap) root.showStacked(); } catch(e) {} } }
     }
     Process { id: removeProc }
     Process {
         id: createProc
-        stdout: StdioCollector { waitForEnd: true; onStreamFinished: { try { root.createResult = JSON.parse(text); } catch(e) { root.createResult = {ok:false, error:"Claude did not finish"}; } } }
+        stdout: StdioCollector { waitForEnd: true; onStreamFinished: { try { root.createResult = JSON.parse(text); } catch(e) { root.createResult = {ok:false, error:"Claude did not finish"}; } if (root.createResult.overlap) root.showStacked(); } }
     }
     function placedText(r) {
-        return (r.page && r.page !== root.page ? "No room here, so it went to desk " + r.page + " (workspace " + r.page + ")." : "Added to this desk.")
+        return (r.overlap ? "No free spot, so it sits on top of the other tiles." : "Added to this desk.")
             + (r.shrunk ? " Sized " + r.w + "x" + r.h + " to fit." : "")
             + (r.missing && r.missing.length ? " It needs " + r.missing.join(", ") + ": run  omarchy pkg add " + r.missing.join(" ") : "");
     }
     function installMessage(text) {
         try {
             var r = JSON.parse(text);
-            if (!r.ok) return r.error === "no room" ? "All three desks are full. Right-click → arrange tiles, then remove or shrink one." : "Not added: " + r.error;
+            if (!r.ok) return "Not added: " + r.error;
             return placedText(r);
         } catch(e) { return "Not added."; }
     }
+    // A tile landed on top of others: close the panel and open arrange mode on it.
+    function showStacked() { storeOpen = false; createOpen = false; typing = false; editing = true; }
+    readonly property bool stacked: Object.keys(config.tiles).some(function(k){ var t = config.tiles[k]; return t.top && t.enabled && (t.page || 1) === page; })
     function installed(id) { return !!root.config.tiles["owl:" + id]; }
     readonly property var storeCategories: {
         var counts = {}, out = [{name: "all", n: storeWidgets.length}];
@@ -967,7 +970,7 @@ Scope {
             Chip {
                 visible: root.editing && !root.menuOpen && !root.storeOpen
                 anchors { horizontalCenter: parent.horizontalCenter; bottom: dock.top; bottomMargin: desk.gap * 2 }
-                ChipText { text: (root.focusing ? "Arrows move the tile · Shift+arrows resize · " : "Drag to move · corner to resize · ") + (root.pages > 1 ? "  N moves it to desk N · " : "") + " remove" }
+                ChipText { text: root.stacked ? "The new tile sits on top: drag it into place, or remove a tile you don't need" : (root.focusing ? "Arrows move the tile · Shift+arrows resize · " : "Drag to move · corner to resize · ") + (root.pages > 1 ? "  N moves it to desk N · " : "") + " remove" }
                 ChipLink { text: "done"; onHit: root.editing = false }
             }
             Chip {
@@ -1431,7 +1434,7 @@ Scope {
                         text: !root.createResult ? "" : root.createResult.ok
                             ? root.createResult.key.slice(10) + ": " + root.placedText(root.createResult)
                               + "\nIt runs: " + root.createResult.programs.filter(function(l){ return l.indexOf("program ")===0; }).map(function(l){ return l.slice(8); }).join(", ")
-                            : root.createResult.error === "no room" ? "Claude wrote " + root.createResult.key.slice(10) + ", but all three desks are full. Free a spot (right-click → arrange tiles), then add it from widget store → yours." : "Not added: " + root.createResult.error
+                            : "Not added: " + root.createResult.error
                     }
                 }
             }

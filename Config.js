@@ -58,6 +58,7 @@ function parse(raw) {
         if(BUILTIN.indexOf(k)===-1 && !owlKey(k)) return;
         var b=base.tiles[k] || (base.tiles[k]={enabled:true,col:0,row:0,w:4,h:4});
         if(typeof t.enabled==='boolean') b.enabled=t.enabled;
+        if(t.top===true) b.top=true;
         if(typeof t.page==='number' && isFinite(t.page)) b.page=clampInt(t.page,1,PAGES);
         ['col','row','w','h'].forEach(function(p){if(typeof t[p]==='number' && isFinite(t[p]))b[p]=t[p];});
         b.w=clampInt(b.w,1,COLS); b.h=clampInt(b.h,1,ROWS);

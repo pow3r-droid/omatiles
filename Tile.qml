@@ -26,9 +26,12 @@ Rectangle {
     visible: !!place && place.enabled && (place.page || 1) === desk.page
     x: desk.cellX(col); y: desk.cellY(row)
     width: desk.spanWidth(spanW); height: desk.spanHeight(spanH)
-    z: drag.pressed || resize.pressed ? 10 : 1
+    // A tile added to a full desk sits on top until it's dragged into place.
+    z: drag.pressed || resize.pressed ? 10 : stacked ? 5 : 1
     radius: Style.cornerRadius
-    color: Util.alpha(Color.background, 0.82)
+    readonly property bool stacked: !!place && place.top === true
+    // Stacked: solid, so the tiles underneath don't show through it.
+    color: stacked ? Color.background : Util.alpha(Color.background, 0.82)
     border.width: desk.editing || focused ? 2 : 1
     border.color: desk.editing || focused ? desk.ink : Util.alpha(Color.foreground, 0.1)
     clip: true
@@ -44,7 +47,7 @@ Rectangle {
         id: body
         anchors.fill: parent
         anchors.margins: tile.padded ? Style.spacing.panelPadding - 2 : 0
-        opacity: desk.editing ? 0.5 : 1
+        opacity: desk.editing && !tile.stacked ? 0.5 : 1
     }
     MouseArea {
         id: drag

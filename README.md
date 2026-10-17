@@ -62,16 +62,21 @@ rm -rf ~/.config/omarchy/omatiles.json ~/.config/omarchy/omatiles ~/.cache/omati
 **Right-click** anywhere on the desk for the menu:
 
 - **arrange tiles:** drag a tile to move it, drag its corner to resize it, and use
-  **→ N** to send it to the next desk. **✕** removes it, and **undo** appears for
-  ten seconds.
+  **→ 2** (one button per other desk) to send it to that desk. **✕** removes it, and
+  **undo** appears for ten seconds.
 - **widget store:** browse, search and add widgets. The *built in* section brings back
   hidden tiles. Each store widget shows what it installs and runs before you add it.
   Widgets made for the phone are labelled *phone only*, and widgets whose packages
   aren't installed say which ones they need.
 - **new widget with claude:** describe a widget. Claude Code writes it, the store's
   checker reviews it, and it lands on a free spot.
+- **tile desktops: 1 / 1–2 / 1–3**
 - **dock icons: theme color / full color**
 - **theme:** switch Omarchy themes from the desk.
+
+New tiles go on the desk you're looking at, shrunk to fit if they need to be. When
+there's no room at all, the new tile sits on top of the others and arrange mode opens,
+so you can drag it into place or remove a tile you don't need.
 
 Many store widgets open their own screen (settings or detail view) when you click
 them, as on the phone. **Right-click a dock icon** to pin or unpin it.
