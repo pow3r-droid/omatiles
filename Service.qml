@@ -1328,10 +1328,14 @@ Scope {
                     Accessible.role: Accessible.Button; Accessible.name: app.modelData.name
                     color: appMouse.containsMouse || (root.dockPick && root.dockPick.id === modelData.id) ? Util.alpha(root.ink, 0.18) : "transparent"
                     Image { id: appIcon; anchors.centerIn: parent; width: 30; height: 30; sourceSize: Qt.size(60,60); source: root.icon(app.modelData); smooth: true; cache: false; visible: !root.config.dockMono }
-                    // Themed icons, like the tablet's: the icon's light and dark kept, in the desk's accent.
-                    MultiEffect {
-                        anchors.fill: appIcon; source: appIcon; visible: root.config.dockMono
-                        colorization: 1.0; colorizationColor: root.ink; brightness: 0.25; contrast: 0.3
+                    // Themed icons, like the tablet's: the icon's own light and dark kept as detail,
+                    // its brightest parts exactly the bar's color. Lift the gray first, tint last:
+                    // brightness after the tint would wash the color out toward lemon.
+                    Item {
+                        anchors.fill: appIcon; visible: root.config.dockMono
+                        layer.enabled: visible
+                        layer.effect: MultiEffect { colorization: 1.0; colorizationColor: root.ink }
+                        MultiEffect { anchors.fill: parent; source: appIcon; saturation: -1.0; brightness: 0.25; contrast: 0.3 }
                     }
                     MouseArea {
                         id: appMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor

@@ -12,7 +12,7 @@ OmaTiles is the public release of a desk first built for one machine, renamed fr
   - failures say what went wrong (unreachable, not installed, not signed in, rate limited), with **retry**
   - missing CLIs show an install hint
 - **Dock:** pinned apps, then recently used ones. Right-click pins or unpins an icon. Theme-colored icons stay
-  optional.
+  optional; their brightest parts are exactly the bar's color, like a phone's themed icons.
 - **Undo:** removing a tile offers undo for ten seconds. Removed widgets are kept for a day.
 - **Keyboard mode** (`qs ipc … call omatiles focus`): arrows, Enter, M, S, A, Esc.
 - **First-run hint**, an arranging hint bar, and page dots in the dock.
