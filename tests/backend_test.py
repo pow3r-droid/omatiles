@@ -805,7 +805,8 @@ class GuardTests(unittest.TestCase):
         hits = []
         for path in sorted(ROOT.rglob('*')):
             parts = path.relative_to(ROOT).parts
-            if not path.is_file() or parts[0] in ('tests', 'owl', '.git') or '__pycache__' in parts:
+            # Everything that ships, vendored files included; only this test names the words.
+            if not path.is_file() or path == Path(__file__).resolve() or '.git' in parts or '__pycache__' in parts:
                 continue
             for n, line in enumerate(path.read_bytes().decode('utf-8', 'ignore').splitlines(), 1):
                 for word in self.WORDS:

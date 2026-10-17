@@ -110,8 +110,10 @@ Scope {
     FileView {
         id: settings; printErrors: false; path: root.home + "/.config/omarchy/omatiles.json"; watchChanges: true
         onFileChanged: reload()
-        onLoaded: root.config=Config.parse(text())
+        onLoaded: { root.config=Config.parse(text()); root.loaded=true; }
     }
+    // Nothing draws or polls until the settings are read, so the default layout never flashes.
+    property bool loaded: false
     JsonFile { id: calendarFile; path: root.cache + "gcal-events.json"; fallback: [] }
     JsonFile { id: gcalStatusFile; path: root.cache + "gcal-status.json"; fallback: ({state: "disconnected"}) }
     JsonFile { id: remoteFile; path: root.cache + "remote.json" }
@@ -132,11 +134,12 @@ Scope {
     Process { id: openUrl; property string url; command: ["xdg-open",url] }
     function run(proc, args) { if (proc.running) return false; proc.command = ["python3", root.backend].concat(args); proc.running = true; return true; }
     function setOption(name, value) { Quickshell.execDetached(["python3", root.backend, "set", name, String(value)]); }
-    function openLink(url) { if (url && !openUrl.running) { openUrl.url = url; openUrl.running = true; } }
+    // Links come from chat replies and calendar events, so only web links open.
+    function openLink(url) { if (/^https?:\/\//i.test(url || "") && !openUrl.running) { openUrl.url = url; openUrl.running = true; } }
 
     // The remote card reads its machine only when asked (its refresh link),
     // never on a timer; this machine's card reads every minute while it shows.
-    function onScreen(key) { var t = config.tiles[key]; return !!t && t.enabled && (t.page || 1) === page && live; }
+    function onScreen(key) { var t = config.tiles[key]; return loaded && !!t && t.enabled && (t.page || 1) === page && live; }
     readonly property bool localShown: onScreen("local")
     function refresh() { if(localShown && !localFetch.running)localFetch.running=true; if(!weatherFetch.running)weatherFetch.running=true; }
     function refreshRemote() { if(!remoteFetch.running)remoteFetch.running=true; }
@@ -392,7 +395,7 @@ Scope {
     PanelWindow {
         id: window
         screen: root.monitor
-        visible: root.shown
+        visible: root.shown && root.loaded
         anchors { top: true; bottom: true; left: true; right: true }
         exclusionMode: ExclusionMode.Normal
         color: "transparent"
@@ -412,6 +415,7 @@ Scope {
             readonly property color ink: root.ink
             readonly property color muted: root.muted
             readonly property string focusKey: root.focusing ? root.focusKey : ""
+            readonly property bool focusing: root.focusing
             readonly property real margin: 10
             readonly property real gap: 8
             readonly property real dockH: 58

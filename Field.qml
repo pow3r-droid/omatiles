@@ -21,7 +21,7 @@ Rectangle {
         font.family: Style.font.family; font.pixelSize: Style.font.body
         Text { anchors.verticalCenter: parent.verticalCenter; visible: !input.text; text: field.placeholder; color: Ui.muted(Color); font: input.font }
         onAccepted: field.accepted()
-        Keys.onEscapePressed: { focus=false; if(field.desk) field.desk.typing=false; }
+        Keys.onEscapePressed: { focus=false; if(field.desk) { field.desk.typing=false; if(field.desk.focusing) field.desk.forceActiveFocus(); } }
     }
     MouseArea { anchors.fill: parent; enabled: !input.activeFocus; cursorShape: Qt.IBeamCursor; onClicked: field.focusIn() }
 }

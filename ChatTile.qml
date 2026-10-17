@@ -148,7 +148,8 @@ Item {
                 color: chat.muted; font: line.font
             }
             onAccepted: if (!chat.busy && text.trim()) { chat.send(text.trim()); text = ""; }
-            Keys.onEscapePressed: { focus = false; if (chat.desk) chat.desk.typing = false; }
+            // In keyboard mode, Esc hands the keys back to the desk.
+            Keys.onEscapePressed: { focus = false; if (chat.desk) { chat.desk.typing = false; if (chat.desk.focusing) chat.desk.forceActiveFocus(); } }
             onActiveFocusChanged: if (!activeFocus && chat.desk) chat.desk.typing = false
         }
         Text {

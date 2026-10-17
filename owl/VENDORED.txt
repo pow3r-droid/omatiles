@@ -1,2 +1,22 @@
-Vendored from github.com/SimonSchubert/omarchy-widgets runtimes/quickshell at 0741f7f on 2026-10-16 (MIT, see LICENSE here). LANGUAGE.md and owl.jar (the store's checker) come from docs/ and tools/.
-Local patch: OwlWidget.qml gains `maxFps` (a frame-rate cap for animated widgets; 0 keeps every frame). The desk sets 30.
+Vendored from github.com/SimonSchubert/omarchy-widgets (MIT, LICENSE here is the upstream one).
+
+Upstream commit: 37d9bace7e8be6e87964277d7b3531c24be18772 (2026-10-17). First taken at 0741f7f; every file
+below was re-checked byte for byte against 37d9bac.
+
+  runtimes/quickshell/   Owl.js OwlLayout.js OwlCanvas.qml OwlHost.qml OwlNode.qml OwlSource.qml
+                         OwlTerminal.qml OwlWidget.qml owl-source README.md
+  docs/LANGUAGE.md       LANGUAGE.md
+  tools/owl.jar          owl.jar, sha256 bfc294234f6cc2ab2024271cb6d55b5259513db0647ac8f636c85997b4f5f0cf
+                         The store's widget checker, as its CI runs it. Upstream builds it from the
+                         Omarchy Android launcher's owl module; this repo does not rebuild it.
+  widgets/simonschubert/{feeds,todo}/widget.owl
+                         examples/feeds.owl examples/todo.owl (the examples Claude reads when it
+                         writes a widget)
+
+The only local change: OwlWidget.qml gains `maxFps`, a frame-rate cap for animated widgets
+(0 keeps every frame; the desk sets 30). Redo it after re-vendoring:
+
+  property real maxFps: 0
+  property real lastFrame: -1
+  FrameAnimation { onRunningChanged: root.lastFrame = -1; onTriggered: skip when maxFps > 0 and
+  elapsedTime - lastFrame < 1 / maxFps - 0.004, else set lastFrame = elapsedTime ... }
