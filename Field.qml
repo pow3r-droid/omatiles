@@ -10,6 +10,7 @@ Rectangle {
     property var desk
     signal accepted()
     readonly property color ink: Ui.ink(Color)
+    Accessible.role: Accessible.EditableText; Accessible.name: placeholder
     function focusIn() { if(desk) desk.typing=true; input.forceActiveFocus(); }
     width: parent ? parent.width : 200; height: Style.spacing.controlHeight + 4; radius: Style.cornerRadius
     color: Util.alpha(Color.foreground, 0.06)

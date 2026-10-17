@@ -2,6 +2,8 @@
 
 ![OmaTiles on workspace 1: this machine, weather, clock, a koi pond widget, sun & moon, calendar and the dock](preview.png)
 
+*The koi pond is a widget from the store; the rest is built in.*
+
 A tile desk for Omarchy. Workspaces 1, 2 and 3 each get a 16 x 8 grid of tiles
 above an app dock, drawn in your current Omarchy theme and following it when you
 switch themes. It works like the home screen of the Omarchy Android launcher.

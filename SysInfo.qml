@@ -14,6 +14,7 @@ Row {
     property string button: ""
     property color ink: Color.accent
     property color muted: Color.muted
+    property color danger: Color.urgent
     signal clicked()
     // On-demand cards show a refresh link beside their status.
     property bool refreshable: false
@@ -68,13 +69,13 @@ Row {
             Row {
                 required property var modelData
                 width: parent.width; spacing: Style.spacing.md
-                Rectangle { width: 7; height: 7; y: 5; radius: 4; color: modelData.ok ? info.ink : Color.urgent }
-                // The state is spelled out too, so it never rests on color alone.
+                Rectangle { width: 7; height: 7; y: 5; radius: 4; color: modelData.ok ? info.ink : info.danger }
+                // The state is spelled out too, so it never rests on color alone; the name gives way first.
                 Text {
-                    width: parent.width - 14; elide: Text.ElideRight
-                    text: modelData.t + (modelData.state ? "  " : ""); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body
-                    Text { x: parent.implicitWidth; visible: parent.implicitWidth < parent.width; text: modelData.state || ""; color: modelData.ok ? info.muted : Color.urgent; font: parent.font }
+                    width: Math.max(0, Math.min(implicitWidth, parent.width - 7 - 2 * parent.spacing - svcState.implicitWidth)); elide: Text.ElideRight
+                    text: modelData.t; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body
                 }
+                Text { id: svcState; leftPadding: Style.spacing.sm; text: modelData.state || ""; color: modelData.ok ? info.muted : info.danger; font.family: Style.font.family; font.pixelSize: Style.font.body }
             }
         }
         Text { visible: conts.count > 0; text: "containers"; color: info.muted; font.family: Style.font.family; font.pixelSize: Style.font.body; topPadding: Style.spacing.sm }
@@ -86,14 +87,14 @@ Row {
                 Row {
                     required property var modelData
                     width: (parent.width-Style.spacing.lg)/2; spacing: 5
-                    Rectangle { width: 5; height: 5; y: 6; radius: 3; color: modelData.up ? info.ink : Color.urgent }
+                    Rectangle { width: 5; height: 5; y: 6; radius: 3; color: modelData.up ? info.ink : info.danger }
                     Text { width: parent.width-10; elide: Text.ElideRight; text: modelData.name + (modelData.up ? "" : " · down"); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
                 }
             }
         }
         Text {
             visible: !!info.machine && !!info.machine.failed && info.machine.failed.length>0
-            width: parent.width; wrapMode: Text.Wrap; font.family: Style.font.family; font.pixelSize: Style.font.body; color: Color.urgent
+            width: parent.width; wrapMode: Text.Wrap; font.family: Style.font.family; font.pixelSize: Style.font.body; color: info.danger
             text: info.machine && info.machine.failed ? "failed: " + info.machine.failed.join(", ") : ""
         }
         Flow {
@@ -102,7 +103,7 @@ Row {
                 visible: info.status !== ""
                 width: Math.min(implicitWidth, parent.width); wrapMode: Text.Wrap
                 font.family: Style.font.family; font.pixelSize: Style.font.body
-                color: info.live ? info.muted : Color.urgent
+                color: info.live ? info.muted : info.danger
                 text: info.status
             }
             Text {

@@ -24,6 +24,14 @@ OmaTiles is the public release of a desk first built for one machine, renamed fr
 - **Store:** previews fall back to the closest theme's screenshot. Widgets made for the phone (they read Android
   notifications) are labelled and listed last, and widgets whose packages are missing say which ones.
 - **Calendar** explains how to add a Google OAuth client when there is none.
+- **Keyboard arranging:** in keyboard mode, arranging moves the focused tile with the arrows and resizes it with
+  Shift+arrows.
+- **Red means trouble only:** errors and removal use the theme's red, lifted to 4.5:1. The sun and its arc use the accent.
+- **Calmer glance:** the clock drops its weather line when the weather tile is on the same desk. The menu, store and
+  widget creator fade in.
+- **Widget states:** store widgets say when they're loading, and a widget that fails explains itself before its raw error.
+- **Undo** shows above the store too, so removing from the store can be undone there.
+- **Accessibility names** on buttons, fields, dock icons and arrange handles. Calendar controls are 24 px.
 - **Settings and data move:**
   - settings to `~/.config/omarchy/omatiles.json`
   - widgets and the Google client to `~/.config/omarchy/omatiles/`

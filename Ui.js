@@ -30,6 +30,8 @@ function ink(C) {
 }
 // Secondary text, lifted to 4.5:1 when the theme's muted color is dimmer.
 function muted(C) { return floor(C.muted, C.background, C.foreground, 4.5); }
+// Errors and destructive actions: the theme's red, lifted to 4.5:1 as text.
+function danger(C) { return floor(C.urgent, C.background, C.foreground, 4.5); }
 
 // "just now", "5m ago", "3h ago", "2d ago" for an epoch-ms time.
 function ago(ms, now) {

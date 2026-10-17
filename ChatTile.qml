@@ -22,6 +22,7 @@ Item {
     property var desk
     property color ink: Color.accent
     property color muted: Color.muted
+    property color danger: Color.urgent
     property var log: []
     readonly property var last: log.length ? log[log.length - 1] : null
     signal send(string text)
@@ -99,7 +100,7 @@ Item {
                         leftPadding: entry.mine ? 0 : Style.spacing.xxl
                         text: entry.mine ? "› " + entry.modelData.text : entry.modelData.text
                         textFormat: entry.mine || entry.modelData.error ? Text.PlainText : Text.MarkdownText
-                        color: entry.mine ? chat.ink : entry.modelData.error ? Color.urgent : Color.foreground
+                        color: entry.mine ? chat.ink : entry.modelData.error ? chat.danger : Color.foreground
                         font.family: Style.font.family; font.pixelSize: Style.font.subtitle; lineHeight: 1.15
                         onLinkActivated: function(url) { chat.link(url); }
                         MouseArea { anchors.fill: parent; acceptedButtons: Qt.NoButton; cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor }
@@ -157,7 +158,8 @@ Item {
         Text {
             anchors { right: parent.right; rightMargin: Style.spacing.xxl; verticalCenter: parent.verticalCenter }
             text: ""; font.family: Style.font.family; font.pixelSize: Style.font.subtitle
-            color: line.text.trim() && !chat.busy ? chat.ink : Util.alpha(chat.muted, 0.5)
+            color: line.text.trim() && !chat.busy ? chat.ink : chat.muted
+            Accessible.role: Accessible.Button; Accessible.name: "send"
             MouseArea {
                 anchors.fill: parent; anchors.margins: -8; cursorShape: Qt.PointingHandCursor
                 onClicked: if (!chat.busy && line.text.trim()) { chat.send(line.text.trim()); line.text = ""; }

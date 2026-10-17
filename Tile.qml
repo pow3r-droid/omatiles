@@ -73,12 +73,13 @@ Rectangle {
         property bool hot: false
         visible: tile.desk.editing
         height: 24; width: Math.max(24, label.implicitWidth + 12); radius: Style.cornerRadius
+        Accessible.role: Accessible.Button
         color: Util.alpha(tone, hot ? 0.45 : 0.2)
         border.width: 1; border.color: tone
         Text { id: label; anchors.centerIn: parent; text: handle.glyph; color: handle.tone; font.family: Style.font.family; font.pixelSize: Style.font.body }
     }
     Handle {
-        glyph: "󰑝"; hot: resize.pressed
+        glyph: "󰑝"; hot: resize.pressed; Accessible.name: "resize"
         anchors { right: parent.right; bottom: parent.bottom; margins: Style.spacing.sm }
         MouseArea {
             id: resize
@@ -95,14 +96,14 @@ Rectangle {
     }
     // Send to the next desk page (workspace), where it takes the first free spot.
     Handle {
-        glyph: " " + (desk.page % desk.pages + 1); hot: moveMouse.containsMouse
+        glyph: " " + (desk.page % desk.pages + 1); hot: moveMouse.containsMouse; Accessible.name: "send to desk " + (desk.page % desk.pages + 1)
         anchors { right: closeHandle.left; top: parent.top; topMargin: Style.spacing.sm; rightMargin: Style.spacing.sm }
         MouseArea { id: moveMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: desk.move(tile.key, desk.page % desk.pages + 1) }
     }
     // Remove: hides a built-in tile, or puts a widget in the trash (the desk offers undo).
     Handle {
         id: closeHandle
-        glyph: ""; tone: Color.urgent; hot: closeMouse.containsMouse
+        glyph: ""; tone: desk.danger; hot: closeMouse.containsMouse; Accessible.name: "remove"
         anchors { right: parent.right; top: parent.top; margins: Style.spacing.sm }
         MouseArea { id: closeMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: desk.remove(tile.key) }
     }

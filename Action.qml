@@ -7,6 +7,8 @@ Rectangle {
     property string text
     signal clicked()
     readonly property color ink: Ui.ink(Color)
+    Accessible.role: Accessible.Button; Accessible.name: text
+    Accessible.onPressAction: if (enabled) clicked()
     width: parent ? parent.width : 80
     height: Style.spacing.controlHeight
     radius: Style.cornerRadius

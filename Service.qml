@@ -68,6 +68,8 @@ Scope {
     // shell's own accent), else the theme accent, kept readable on the background.
     readonly property color ink: Ui.ink(Color)
     readonly property color muted: Ui.muted(Color)
+    // Red is kept for failure and destruction only.
+    readonly property color danger: Ui.danger(Color)
     readonly property bool metric: config.units === "metric" || (config.units === "auto" && Qt.locale().measurementSystem === Locale.MetricSystem)
     readonly property bool h12: /a|AP/i.test(Qt.locale().timeFormat(Locale.ShortFormat))
     // The locale's short date without the year: "M/d", "dd.MM", "MM-dd".
@@ -140,6 +142,7 @@ Scope {
     // The remote card reads its machine only when asked (its refresh link),
     // never on a timer; this machine's card reads every minute while it shows.
     function onScreen(key) { var t = config.tiles[key]; return loaded && !!t && t.enabled && (t.page || 1) === page && live; }
+    function onPage(key) { var t = config.tiles[key]; return !!t && t.enabled && (t.page || 1) === page; }
     readonly property bool localShown: onScreen("local")
     function refresh() { if(localShown && !localFetch.running)localFetch.running=true; if(!weatherFetch.running)weatherFetch.running=true; }
     function refreshRemote() { if(!remoteFetch.running)remoteFetch.running=true; }
@@ -415,6 +418,7 @@ Scope {
             readonly property int pages: root.pages
             readonly property color ink: root.ink
             readonly property color muted: root.muted
+            readonly property color danger: root.danger
             readonly property string focusKey: root.focusing ? root.focusKey : ""
             readonly property bool focusing: root.focusing
             readonly property real margin: 10
@@ -458,6 +462,14 @@ Scope {
                     else if (root.menuOpen || root.storeOpen || root.createOpen) { root.menuOpen = false; root.storeOpen = false; root.createOpen = false; }
                     else if (root.editing) root.editing = false;
                     else root.stopFocus();
+                }
+                else if (root.editing && root.focusKey && [Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down].indexOf(k) !== -1) {
+                    // Arranging: arrows move the focused tile a cell, Shift+arrows resize it.
+                    var dx = k === Qt.Key_Left ? -1 : k === Qt.Key_Right ? 1 : 0, dy = k === Qt.Key_Up ? -1 : k === Qt.Key_Down ? 1 : 0;
+                    var t0 = root.config.tiles[root.focusKey], g = {col: t0.col, row: t0.row, w: t0.w, h: t0.h};
+                    if (e.modifiers & Qt.ShiftModifier) { g.w = Math.max(1, Math.min(Config.COLS - g.col, g.w + dx)); g.h = Math.max(1, Math.min(Config.ROWS - g.row, g.h + dy)); }
+                    else { g.col = Math.max(0, Math.min(Config.COLS - g.w, g.col + dx)); g.row = Math.max(0, Math.min(Config.ROWS - g.h, g.row + dy)); }
+                    desk.place(root.focusKey, g);
                 }
                 else if (k === Qt.Key_Left) root.step(-1, 0);
                 else if (k === Qt.Key_Right) root.step(1, 0);
@@ -512,7 +524,8 @@ Scope {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        visible: !!root.weather
+                        // The weather tile says this already when it is on the same desk.
+                        visible: !!root.weather && !root.onPage("weather")
                         text: root.weather ? (root.deg(root.weather, "temp") + (root.metric ? "C " : "F ") + root.weather.desc + " · " + root.wind(root.weather)).toUpperCase() : ""
                         color: Util.alpha(root.ink, 0.85); font.family: Style.font.family; font.pixelSize: Style.font.body
                         width: Math.min(implicitWidth, clockTile.body.width); elide: Text.ElideRight
@@ -529,7 +542,7 @@ Scope {
                 onActivated: Quickshell.execDetached(["omarchy-launch-or-focus-tui","btop"])
                 SysInfo {
                     machine: localTile.m; user: localTile.m && localTile.m.who ? localTile.m.who : "this machine"
-                    waiting: "Reading this machine…"; live: localTile.live; ink: root.ink; muted: root.muted
+                    waiting: "Reading this machine…"; live: localTile.live; ink: root.ink; muted: root.muted; danger: root.danger
                     services: root.serviceRows(localTile.m)
                         .concat(localTile.m && localTile.m.tailscale !== null && localTile.m.tailscale !== undefined
                                 ? [{t: "Tailscale", ok: !!localTile.m.tailscale, state: localTile.m.tailscale || "down"}] : [])
@@ -551,7 +564,7 @@ Scope {
                     visible: remoteTile.r.host !== ""
                     machine: remoteTile.m; user: remoteTile.m && remoteTile.m.who ? remoteTile.m.who : remoteTile.label
                     waiting: remoteFetch.running ? "Checking " + remoteTile.label + "…" : "Not checked yet. Refresh reads " + remoteTile.label + " once over ssh."
-                    live: remoteTile.live || remoteFetch.running; ink: root.ink; muted: root.muted
+                    live: remoteTile.live || remoteFetch.running; ink: root.ink; muted: root.muted; danger: root.danger
                     services: root.serviceRows(remoteTile.m)
                     status: remoteFetch.running ? "checking " + remoteTile.label + "…" : !remoteTile.m ? ""
                           : remoteTile.live ? "checked " + root.ago(remoteTile.m.updatedAt)
@@ -590,12 +603,13 @@ Scope {
                         width: parent.width; spacing: Style.spacing.sm
                         component Glyph: Text {
                             signal hit()
-                            width: 22; height: 22; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+                            width: 24; height: 24; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+                            Accessible.role: Accessible.Button
                             color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body
                             MouseArea { anchors.fill: parent; anchors.margins: -4; cursorShape: Qt.PointingHandCursor; onClicked: parent.hit() }
                         }
                         Glyph { text: ""; onHit: root.shiftMonth(-1) }
-                        Text { width: parent.width-78; height: 22; verticalAlignment: Text.AlignVCenter; text: new Date(root.year,root.month,1).toLocaleDateString(Qt.locale(), "MMMM yyyy"); color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.title }
+                        Text { width: parent.width-84; height: 24; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; text: new Date(root.year,root.month,1).toLocaleDateString(Qt.locale(), "MMMM yyyy"); color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.title }
                         Glyph { text: ""; onHit: root.shiftMonth(1) }
                         Glyph {
                             id: addLink; visible: root.gcalState==="ok"; text: root.adding ? "" : ""
@@ -646,7 +660,7 @@ Scope {
                         }
                         Column {
                             visible: root.gcalState === "error"; width: parent.width; spacing: Style.spacing.sm
-                            Label { color: Color.urgent; font.pixelSize: Style.font.body; text: "Couldn't load the calendar" + (gcalStatusFile.value && gcalStatusFile.value.message ? " (" + gcalStatusFile.value.message + ")" : "") + "." }
+                            Label { color: root.danger; font.pixelSize: Style.font.body; text: "Couldn't load the calendar" + (gcalStatusFile.value && gcalStatusFile.value.message ? " (" + gcalStatusFile.value.message + ")" : "") + "." }
                             Action { text: calendarFetch.running ? "Trying…" : "Try again"; onClicked: if(!calendarFetch.running) calendarFetch.running = true }
                         }
                         Column {
@@ -659,7 +673,7 @@ Scope {
                                 Field { id: evEnd; width: (parent.width-Style.spacing.md)/2; desk: desk; placeholder: "End 15:00"; onAccepted: root.saveEvent() }
                             }
                             Action { text: gcalAdd.running ? "Saving…" : "Save to Google Calendar"; enabled: evTitle.text.trim() !== ""; onClicked: root.saveEvent() }
-                            Label { visible: root.addError!==""; text: root.addError; color: Color.urgent; font.pixelSize: Style.font.body }
+                            Label { visible: root.addError!==""; text: root.addError; color: root.danger; font.pixelSize: Style.font.body }
                         }
                         Label { visible: !root.adding; text: new Date(root.year,root.month,root.selDay).toLocaleDateString(Qt.locale(),"dddd, MMM d"); color: root.ink; font.pixelSize: Style.font.body }
                         Repeater {
@@ -720,8 +734,8 @@ Scope {
                                 Text { text: root.deg(wxTile.w, "temp"); color: Color.foreground; font.family: Style.font.family; font.pixelSize: 36 }
                             }
                             Column {
-                                anchors.right: parent.right; y: 6; spacing: Style.spacing.xxs
-                                Text { anchors.right: parent.right; text: wxTile.w ? wxTile.w.desc.toLowerCase() : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.subtitle }
+                                anchors.right: parent.right; y: 6; spacing: Style.spacing.xxs; width: parent.width * 0.45
+                                Text { anchors.right: parent.right; width: Math.min(implicitWidth, parent.width); elide: Text.ElideRight; text: wxTile.w ? wxTile.w.desc.toLowerCase() : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.subtitle }
                                 Text { anchors.right: parent.right; text: wxTile.w && wxTile.w.days.length ? "↑" + root.deg(wxTile.w.days[0], "hi") + "  ↓" + root.deg(wxTile.w.days[0], "lo") : ""; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
                             }
                         }
@@ -748,8 +762,8 @@ Scope {
                         Column {
                             visible: !!wxTile.w && wxTile.w.days.length > 0
                             width: parent.width/3; spacing: Style.spacing.md; topPadding: Style.spacing.md
-                            Row { spacing: Style.spacing.lg; Text { text: ""; color: Color.urgent; font.family: Style.font.family; font.pixelSize: 15 } Text { text: wxTile.w && wxTile.w.days.length ? root.sunTime(wxTile.w.days[0].sunrise, false) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body } }
-                            Row { spacing: Style.spacing.lg; Text { text: ""; color: Color.urgent; font.family: Style.font.family; font.pixelSize: 15 } Text { text: wxTile.w && wxTile.w.days.length ? root.sunTime(wxTile.w.days[0].sunset, false) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body } }
+                            Row { spacing: Style.spacing.lg; Text { text: ""; color: root.ink; font.family: Style.font.family; font.pixelSize: 15 } Text { text: wxTile.w && wxTile.w.days.length ? root.sunTime(wxTile.w.days[0].sunrise, false) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body } }
+                            Row { spacing: Style.spacing.lg; Text { text: ""; color: root.ink; font.family: Style.font.family; font.pixelSize: 15 } Text { text: wxTile.w && wxTile.w.days.length ? root.sunTime(wxTile.w.days[0].sunset, false) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body } }
                         }
                     }
                 }
@@ -770,7 +784,7 @@ Scope {
                     visible: !!sunTile.today
                     anchors { left: parent.left; right: parent.right; top: parent.top; topMargin: 26; bottom: sunFoot.top; bottomMargin: Style.spacing.md }
                     property real p: sunTile.progress
-                    property color lit: Color.urgent
+                    property color lit: root.ink
                     property color dim: Util.alpha(Color.foreground, 0.25)
                     onPChanged: requestPaint()
                     onLitChanged: requestPaint()
@@ -841,7 +855,7 @@ Scope {
                         id: chatView
                         agent: chatTile.modelData; name: root.agentName(chatTile.modelData); where: root.chatWhere
                         available: root.agentHere(chatTile.modelData); readOnly: chatTile.modelData !== "hermes"
-                        busy: root.proc(chatTile.modelData).running; epoch: root.chatEpoch; now: root.now; desk: deskItem; ink: root.ink; muted: root.muted
+                        busy: root.proc(chatTile.modelData).running; epoch: root.chatEpoch; now: root.now; desk: deskItem; ink: root.ink; muted: root.muted; danger: root.danger
                         onSend: function(text) { root.send(chatTile.modelData, text); }
                         onRetry: root.retry(chatTile.modelData)
                         onFresh: root.newChat(chatTile.modelData)
@@ -888,8 +902,13 @@ Scope {
                             : { kind: "Column", p: { gap: 0 }, h: {}, a: {}, c: ow.tree.children }
                     }
                     Text {
-                        anchors.fill: ow; visible: !!ow.error; text: "This widget didn't load:\n" + ow.error
-                        color: Color.urgent; font.family: Style.font.family; font.pixelSize: Style.font.body; wrapMode: Text.Wrap; elide: Text.ElideRight
+                        anchors.centerIn: parent; visible: !ow.error && !ow.tree
+                        text: root.tileName(owlTile.key) + " · loading…"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
+                    }
+                    Column {
+                        anchors.fill: ow; visible: !!ow.error; spacing: Style.spacing.sm; clip: true
+                        Text { width: parent.width; wrapMode: Text.Wrap; text: root.tileName(owlTile.key) + " didn't load. Arrange tiles to remove it, or reinstall it from the store."; color: root.danger; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                        Text { width: parent.width; wrapMode: Text.WrapAnywhere; maximumLineCount: 4; elide: Text.ElideRight; text: ow.error || ""; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
                     }
                 }
             }
@@ -919,10 +938,11 @@ Scope {
             Chip {
                 visible: root.editing && !root.menuOpen && !root.storeOpen
                 anchors { horizontalCenter: parent.horizontalCenter; bottom: dock.top; bottomMargin: desk.gap * 2 }
-                ChipText { text: "Drag to move · corner to resize ·  next desk ·  remove" }
+                ChipText { text: (root.focusing ? "Arrows move the tile · Shift+arrows resize · " : "Drag to move · corner to resize · ") + " next desk ·  remove" }
                 ChipLink { text: "done"; onHit: root.editing = false }
             }
             Chip {
+                z: 49
                 visible: root.undoKey !== "" && !root.editing
                 anchors { horizontalCenter: parent.horizontalCenter; bottom: dock.top; bottomMargin: desk.gap * 2 }
                 ChipText { text: "Removed " + root.tileName(root.undoKey) }
@@ -935,7 +955,7 @@ Scope {
                 ChipLink { text: "undo"; onHit: root.undoRemove() }
             }
             Chip {
-                visible: root.focusing && !root.typing
+                visible: root.focusing && !root.typing && !root.editing
                 anchors { horizontalCenter: parent.horizontalCenter; bottom: dock.top; bottomMargin: desk.gap * 2 }
                 ChipText { text: "Arrows pick a tile · Enter uses it · M menu · S store · A arrange · Esc leaves" }
             }
@@ -943,7 +963,9 @@ Scope {
             // ── Right-click menu (the tablet's long-press menu) ─────────────
             Rectangle {
                 id: menu
-                visible: root.menuOpen; z: 50
+                z: 50
+                opacity: root.menuOpen ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
                 width: 380; height: menuCol.implicitHeight + 28
                 x: Math.max(desk.margin, Math.min(root.menuX, desk.width - width - 10)); y: Math.max(desk.margin, Math.min(root.menuY, desk.height - height - 10))
                 color: Color.background; border.width: 2; border.color: root.ink; radius: Style.cornerRadius
@@ -953,7 +975,7 @@ Scope {
                     Repeater {
                         model: [{t: root.editing ? "done arranging" : "arrange tiles", a: "arrange"},
                                 {t: "widget store", a: "store"}, {t: "new widget with claude", a: "create"},
-                                {t: root.config.dockMono ? "dock icons: full color" : "dock icons: theme color", a: "mono"}]
+                                {t: root.config.dockMono ? "use full-color dock icons" : "use theme-colored dock icons", a: "mono"}]
                         Rectangle {
                             required property var modelData
                             width: parent.width; height: 34; radius: Style.cornerRadius
@@ -1006,7 +1028,9 @@ Scope {
             // ── Widget store ────────────────────────────────────────────────
             Rectangle {
                 id: storePanel
-                visible: root.storeOpen; z: 45
+                z: 45
+                opacity: root.storeOpen ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
                 x: desk.margin; y: desk.margin
                 width: desk.width - 2*desk.margin; height: desk.gridH + desk.gap + desk.dockH
                 color: Color.background; border.width: 2; border.color: root.ink; radius: Style.cornerRadius
@@ -1076,7 +1100,7 @@ Scope {
                                             MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: root.run(installProc, ["add", localRow.key, String(root.page)]) }
                                         }
                                         Text {
-                                            text: "delete"; color: Color.urgent; font.family: Style.font.family; font.pixelSize: Style.font.body
+                                            text: "delete"; color: root.danger; font.family: Style.font.family; font.pixelSize: Style.font.body
                                             MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: root.removeTile(localRow.key) }
                                         }
                                     }
@@ -1107,7 +1131,7 @@ Scope {
                                             x: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 8; width: parent.width - 24; elide: Text.ElideRight
                                             readonly property string note: root.compatLabel(modelData.id)
                                             text: note || (modelData.category || "other") + " · " + modelData.size[0] + "x" + modelData.size[1]
-                                            color: note ? Color.urgent : root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
+                                            color: note ? root.danger : root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
                                         }
                                         MouseArea { id: cardMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { root.storePick = modelData; root.storeMessage = ""; } }
                                     }
@@ -1130,7 +1154,7 @@ Scope {
                         Label { visible: !!detail.w; text: detail.w ? detail.w.description : ""; font.pixelSize: Style.font.subtitle }
                         Label {
                             readonly property var c: detail.w ? root.compat(detail.w.id) : null
-                            visible: !!c && (c.phone || c.missing.length > 0); color: Color.urgent; font.pixelSize: Style.font.body
+                            visible: !!c && (c.phone || c.missing.length > 0); color: root.danger; font.pixelSize: Style.font.body
                             text: !c ? "" : c.phone ? "Made for the phone: it reads Android notifications, which a desktop doesn't have, so it stays empty here."
                                 : "Needs " + c.missing.join(", ") + ", not installed here. Install with  omarchy pkg add " + c.missing.join(" ")
                         }
@@ -1226,12 +1250,16 @@ Scope {
 
             // ── New widget with Claude ──────────────────────────────────────
             Rectangle {
-                anchors.fill: parent; z: 46; visible: root.createOpen
+                anchors.fill: parent; z: 46
+                opacity: root.createOpen ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
                 color: Util.alpha(Color.background, 0.55)
                 MouseArea { anchors.fill: parent; acceptedButtons: Qt.LeftButton | Qt.RightButton; onClicked: { root.createOpen = false; root.typing = false; } }
             }
             Rectangle {
-                visible: root.createOpen; z: 46
+                z: 46
+                opacity: root.createOpen ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
                 width: Math.min(640, desk.width - 40); height: createCol.implicitHeight + 36
                 anchors.centerIn: parent
                 color: Color.background; border.width: 2; border.color: root.ink; radius: Style.cornerRadius
@@ -1263,7 +1291,7 @@ Scope {
                     }
                     Label {
                         visible: !!root.createResult; font.pixelSize: Style.font.body
-                        color: root.createResult && root.createResult.ok ? Color.foreground : Color.urgent
+                        color: root.createResult && root.createResult.ok ? Color.foreground : root.danger
                         text: !root.createResult ? "" : root.createResult.ok
                             ? root.createResult.key.slice(10) + ": " + root.placedText(root.createResult)
                               + "\nIt runs: " + root.createResult.programs.filter(function(l){ return l.indexOf("program ")===0; }).map(function(l){ return l.slice(8); }).join(", ")
@@ -1288,6 +1316,7 @@ Scope {
                     required property var modelData
                     property bool pinned: true
                     width: 44; height: 44; radius: Style.cornerRadius
+                    Accessible.role: Accessible.Button; Accessible.name: app.modelData.name
                     color: appMouse.containsMouse || (root.dockPick && root.dockPick.id === modelData.id) ? Util.alpha(root.ink, 0.18) : "transparent"
                     Image { id: appIcon; anchors.centerIn: parent; width: 30; height: 30; sourceSize: Qt.size(60,60); source: root.icon(app.modelData); smooth: true; cache: false; visible: !root.config.dockMono }
                     // Themed icons, like the tablet's: the icon's light and dark kept, in the desk's accent.
