@@ -17,6 +17,9 @@ import sys
 import tempfile
 import time
 
+# Nothing may be written into the plugin folder: Omarchy reloads a plugin when its files change.
+sys.dont_write_bytecode = True
+
 CACHE = Path.home() / '.cache/omatiles'
 CONFIG = Path.home() / '.config/omarchy'
 CONFIG_FILE = 'omatiles.json'
@@ -827,6 +830,82 @@ def init(defaults):
     prune_trash()
     agents_here()
 
+# ── Dock marks: an app's own shape, traced from its icon ────────────────────────
+ICON_NAME = re.compile(r'[A-Za-z0-9@._+-]{1,200}\Z')
+MARK_MAX_BYTES = 4 * 1024 * 1024
+
+def icon_dirs():
+    home = Path.home()
+    data = [home / '.local/share'] + [Path(d) for d in os.environ.get('XDG_DATA_DIRS', '/usr/local/share:/usr/share').split(':') if d]
+    out = [home / '.icons'] + [d / 'icons' for d in data] + [home / '.local/share/flatpak/exports/share/icons',
+                                                          Path('/var/lib/flatpak/exports/share/icons')]
+    return [d for d in out if d.is_dir()], [d / 'pixmaps' for d in data if (d / 'pixmaps').is_dir()]
+
+def icon_png(name):
+    """The largest PNG (up to 512 px) of an app icon in the hicolor theme, else pixmaps."""
+    if name.startswith('/'):
+        p = Path(name)
+        return p if p.suffix == '.png' and p.is_file() else None
+    if not ICON_NAME.match(name):
+        return None
+    themes, pixmaps = icon_dirs()
+    best, size = None, 0
+    for base in themes:
+        for folder in (base / 'hicolor').glob('*/apps'):
+            m = re.match(r'(\d+)x\d+(@\d+)?$', folder.parent.name)
+            px = int(m.group(1)) if m else 0
+            cand = folder / (name + '.png')
+            if size < px <= 512 and cand.is_file():
+                best, size = cand, px
+    if best:
+        return best
+    for base in pixmaps:
+        cand = base / (name + '.png')
+        if cand.is_file():
+            return cand
+    return None
+
+_TRACER = []
+
+def tracer():
+    """icontrace.py next to this file, loaded by path (the standard library has a `trace`)."""
+    if not _TRACER:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('icontrace', Path(__file__).resolve().parent / 'icontrace.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _TRACER.append(module)
+    return _TRACER[0]
+
+def marks(names):
+    """Trace each dock icon's shape once; cache/marks.json maps icon name -> 24 x 24 path."""
+    out_file = CACHE / 'marks.json'
+    try:
+        cached = json.loads(out_file.read_text())
+    except (OSError, ValueError):
+        cached = {}
+    out = {}
+    for name in names[:64]:
+        if not isinstance(name, str):
+            continue
+        png = icon_png(name)
+        if not png:
+            continue
+        st = png.stat()
+        key = '%s:%d:%d' % (png, st.st_size, int(st.st_mtime))
+        old = cached.get(name)
+        if isinstance(old, dict) and old.get('key') == key:
+            out[name] = old
+            continue
+        d = ''
+        if st.st_size <= MARK_MAX_BYTES:
+            try:
+                d = tracer().trace(png)
+            except Exception:
+                d = ''
+        out[name] = {'key': key, 'path': d}
+    atomic(out_file, json.dumps(out))
+
 def page_arg(i):
     return int(sys.argv[i]) if len(sys.argv) > i and sys.argv[i].isdigit() else 1
 
@@ -853,6 +932,7 @@ if __name__ == '__main__':
         'new': lambda: new_chat(args[0]),
         'agents': agents_here,
         'weather': weather,
+        'marks': lambda: marks(json.loads(args[0]) if args else []),
     }
     if op not in ops:
         sys.exit('unknown operation: ' + op)

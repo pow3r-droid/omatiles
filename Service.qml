@@ -11,6 +11,7 @@ import "calendar/Model.js" as Calendar
 import "owl" as Owl
 import "owl/Owl.js" as OwlJs
 import "Glyphs.js" as Glyphs
+import "Brands.js" as Brands
 
 // OmaTiles: a home screen on the first workspaces (1, 1-2 or 1-3, picked on first
 // run), a 16 x 8 grid of tiles above an app dock, drawn in the active Omarchy theme.
@@ -236,6 +237,12 @@ Scope {
         var pinned = config.dock, list = Array.isArray(recentFile.value) ? recentFile.value : [];
         return (themeSlug, DesktopEntries.applications.values, list.filter(function(id){ return pinned.indexOf(id) === -1; }).map(entry).filter(function(e){ return !!e; }));
     }
+    // Apps with no logo get their own shape, traced from their icon once (cache/marks.json).
+    JsonFile { id: marksFile; path: root.cache + "marks.json"; fallback: ({}) }
+    Process { id: marksProc; onExited: marksFile.reload() }
+    readonly property var dockIcons: config.dockMono ? pinnedApps.concat(recentApps).map(function(e){ return e.icon || ""; }).filter(function(n){ return n; }) : []
+    onDockIconsChanged: marksTimer.restart()
+    Timer { id: marksTimer; interval: 500; onTriggered: if (root.dockIcons.length && !root.run(marksProc, ["marks", JSON.stringify(root.dockIcons)])) restart() }
     property var dockPick: null
     Process { id: pinProc }
     function pin(id, on) { run(pinProc, [on ? "pin" : "unpin", id]); dockPick = null; }
@@ -1458,12 +1465,19 @@ Scope {
                     Accessible.role: Accessible.Button; Accessible.name: app.modelData.name
                     color: appMouse.containsMouse || (root.dockPick && root.dockPick.id === modelData.id) ? Util.alpha(root.ink, 0.18) : "transparent"
                     Image { anchors.centerIn: parent; width: 30; height: 30; sourceSize: Qt.size(60,60); source: root.config.dockMono ? "" : root.icon(app.modelData); smooth: true; cache: false; visible: !root.config.dockMono }
-                    // Symbol icons, like the tablet's icon pack: one Nerd Font symbol per app in
-                    // the bar's color; apps without one show their initial in a circle.
+                    // Themed icons, like the tablet's icon pack: the app's own logo, or its own
+                    // shape traced from its icon, drawn flat in the bar's color (an SVG path, so no
+                    // tint over a picture); a font symbol for generic tools; else its initial.
+                    readonly property var mark: root.config.dockMono ? Glyphs.look(app.modelData, root.config.dockSymbols, Brands.PATHS, marksFile.value) : null
+                    Image {
+                        anchors.centerIn: parent; width: 28; height: 28; sourceSize: Qt.size(56, 56)
+                        visible: !!app.mark && !!app.mark.path
+                        source: visible ? Glyphs.svgUrl(app.mark.path, String(root.ink), !!app.mark.evenodd) : ""
+                    }
                     Text {
-                        anchors.centerIn: parent; visible: root.config.dockMono
-                        text: root.config.dockMono ? (Glyphs.symbol(app.modelData, root.config.dockSymbols) || Glyphs.initial(app.modelData)) : ""
-                        color: root.ink; font.family: Style.font.family; font.pixelSize: 28
+                        anchors.centerIn: parent; visible: !!app.mark && !app.mark.path
+                        text: visible ? app.mark.glyph : ""
+                        color: root.ink; font.family: Style.font.family; font.pixelSize: 32
                     }
                     MouseArea {
                         id: appMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor

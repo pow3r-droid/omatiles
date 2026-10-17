@@ -264,52 +264,78 @@ test('dayEvents includes multi-day events and respects day edges', () => {
   assert.deepEqual(calendar.dayEvents([], 2026, 9, 1), []);
 });
 
-// ── Glyphs: symbol dock icons ─────────────────────────────────────────────────
-const cp = (s) => s ? 'U+' + s.codePointAt(0).toString(16).toUpperCase() : '';
-test('symbols match apps by name, then id or icon, then category', () => {
-  assert.equal(cp(glyphs.symbol({id: 'chromium', name: 'Chromium'})), 'U+F02AF');
-  assert.equal(cp(glyphs.symbol({id: 'com.mitchellh.ghostty', name: 'Ghostty'})), 'U+F02A0');
-  assert.equal(cp(glyphs.symbol({id: 'org.telegram.desktop', name: 'Telegram Desktop'})), 'U+F1D8');
-  assert.equal(cp(glyphs.symbol({id: 'X', name: 'X'})), 'U+F0B1F');
-  // by icon name when the display name is unknown
-  assert.equal(cp(glyphs.symbol({id: 'my-discord', name: 'Chat app', icon: 'omarchy-discord'})), 'U+F1FF');
-  // by category when nothing names it
-  assert.equal(cp(glyphs.symbol({id: 'zz', name: 'Zzterm', categories: ['System', 'TerminalEmulator']})), 'U+F018D');
-  assert.equal(glyphs.symbol({id: 'zz', name: 'Zz'}), '');
-  assert.equal(glyphs.symbol(null), '');
+// ── Glyphs: dock icons as logos or symbols ────────────────────────────────────
+const brands = require('../Brands.js').PATHS;
+const look = (e, o) => glyphs.look(e, o, brands);
+const cp = (m) => m && m.glyph ? 'U+' + m.glyph.codePointAt(0).toString(16).toUpperCase() : '';
+const logo = (slug) => ({path: brands[slug]});
+
+test('every logo the rules name is vendored, as one 24x24 path', () => {
+  for (const [, , slug] of glyphs.BRANDS) assert.ok(brands[slug], slug);
+  for (const d of Object.values(brands)) assert.match(d, /^[Mm][MmLlHhVvCcSsQqTtAaZz\d\s.,+\-eE]+$/);
 });
 
-test('a Chrome web app is not taken for Chromium', () => {
-  const app = {id: 'chrome-nfaecocciihflaoagabpadoaiidbnfek-Default', name: 'Google Antigravity', icon: 'chrome-nfaecocciihflaoagabpadoaiidbnfek-Default'};
-  assert.equal(glyphs.symbol(app), '');
-  assert.equal(cp(glyphs.symbol({id: 'chrome-fmp-Default', name: 'Claude', icon: 'chrome-fmp-Default'})), 'U+F06C4');
+test('apps get their own logo by name, then id or icon', () => {
+  assert.deepEqual(look({id: 'chromium', name: 'Chromium'}), logo('googlechrome'));
+  assert.deepEqual(look({id: 'com.mitchellh.ghostty', name: 'Ghostty'}), logo('ghostty'));
+  assert.deepEqual(look({id: 'org.telegram.desktop', name: 'Telegram Desktop'}), logo('telegram'));
+  assert.deepEqual(look({id: 'obsidian', name: 'Obsidian'}), logo('obsidian'));
+  assert.deepEqual(look({id: 'X', name: 'X'}), logo('x'));
+  assert.deepEqual(look({id: 'yt', name: 'YouTube Music'}), logo('youtubemusic'));
+  assert.deepEqual(look({id: 'my-discord', name: 'Chat app', icon: 'omarchy-discord'}), logo('discord'));
 });
 
-test('categories may come as a QML list rather than an array', () => {
-  const list = {length: 2, 0: 'Network', 1: 'WebBrowser'};
-  assert.equal(cp(glyphs.symbol({id: 'zz', name: 'Zz', categories: list})), 'U+F059F');
+test('a Chrome web app gets its own logo, never Chromium\'s', () => {
+  assert.deepEqual(look({id: 'chrome-fmp-Default', name: 'Claude', icon: 'chrome-fmp-Default'}), logo('claude'));
+  const other = look({id: 'chrome-nfaecocciihflaoagabpadoaiidbnfek-Default', name: 'Some Web App', icon: 'chrome-nfaecocciihflaoagabpadoaiidbnfek-Default'});
+  assert.equal(other.path, undefined);
+  assert.equal(cp(other), 'U+F0C23');
 });
 
-test('overrides take a symbol or its hex code, by desktop id or name', () => {
-  assert.equal(cp(glyphs.symbol({id: 'Home Server', name: 'Home Server'}, {'Home Server': 'f048b'})), 'U+F048B');
-  assert.equal(cp(glyphs.symbol({id: 'some-bot', name: 'Some Bot'}, {'some-bot': 'U+F0B05'})), 'U+F0B05');
-  assert.equal(glyphs.symbol({id: 'a', name: 'A'}, {a: '\u2605'}), '\u2605');
-  // junk is ignored, and the app's own match still applies
-  for (const bad of ['', 'abc', 'zzzzzzz', '0x1', 5, null]) assert.equal(cp(glyphs.symbol({id: 'chromium', name: 'Chromium'}, {chromium: bad})), 'U+F02AF', String(bad));
+test('generic tools and categories get a symbol; the rest their initial', () => {
+  assert.equal(cp(look({id: 'org.gnome.Nautilus', name: 'Files'})), 'U+F024B');
+  assert.equal(cp(look({id: 'zz', name: 'Zzterm', categories: ['System', 'TerminalEmulator']})), 'U+F018D');
+  assert.equal(cp(look({id: 'zz', name: 'Zz', categories: {length: 2, 0: 'Network', 1: 'WebBrowser'}})), 'U+F059F');
+  assert.equal(cp(look({id: 'zz', name: 'Gimme'})), 'U+F0BFF');
+  assert.equal(cp(look({id: 'zz', name: 'hermes'})), 'U+F0C02');
+  assert.equal(cp(look({id: 'zz', name: 'zed'})), 'U+F0C38');
+  assert.equal(cp(look({id: 'zz', name: '1Up'})), 'U+F0614');
+  assert.equal(cp(look(null)), 'U+F0614');
+  // without the logo table a brand app falls through to its initial
+  assert.equal(cp(glyphs.look({id: 'chromium', name: 'Chromium'})), 'U+F0BF3');
 });
 
-test('apps without a symbol show their initial in a circle', () => {
-  assert.equal(cp(glyphs.initial({name: 'Gimme'})), 'U+F0BFF');
-  assert.equal(cp(glyphs.initial({name: 'hermes'})), 'U+F0C02');
-  assert.equal(cp(glyphs.initial({name: 'Antigravity'})), 'U+F0BED');
-  assert.equal(cp(glyphs.initial({name: 'zed'})), 'U+F0C38');
-  assert.equal(cp(glyphs.initial({name: '1Password'})), 'U+F0614');
-  assert.equal(cp(glyphs.initial({})), 'U+F0614');
+test('overrides take a logo slug, an SVG path, a symbol or its hex code', () => {
+  assert.deepEqual(look({id: 'Home Server', name: 'Home Server'}, {'Home Server': 'hp'}), logo('hp'));
+  assert.deepEqual(look({id: 'some-bot', name: 'Some Bot'}, {'Some Bot': 'M0 0h24v24H0z'}), {path: 'M0 0h24v24H0z'});
+  assert.equal(cp(look({id: 'some-bot', name: 'Some Bot'}, {'some-bot': 'U+F048B'})), 'U+F048B');
+  assert.deepEqual(look({id: 'a', name: 'A'}, {a: '\u2605'}), {glyph: '\u2605'});
+  // junk, or a path with anything but path commands, is ignored
+  for (const bad of ['', 'abc', 'zzzzzzz', '0x1', 'M0 0"/><script>', 5, null])
+    assert.deepEqual(look({id: 'chromium', name: 'Chromium'}, {chromium: bad}), logo('googlechrome'), String(bad));
 });
 
-test('parse keeps symbol overrides as short strings only', () => {
-  const d = config.parse(JSON.stringify({dockSymbols: {a: 'f048b', b: 7, c: 'x'.repeat(40)}})).dockSymbols;
-  assert.deepEqual(d, {a: 'f048b'});
+test('apps with no logo or tool symbol use the shape traced from their icon', () => {
+  const marks = {'some-icon': {path: 'M0 0h24v24H0z'}, empty: {path: ''}};
+  assert.deepEqual(glyphs.look({id: 'q', name: 'Qq', icon: 'some-icon'}, {}, brands, marks), {path: 'M0 0h24v24H0z', evenodd: true});
+  // a logo or a tool symbol still wins, an empty trace falls through
+  assert.deepEqual(glyphs.look({id: 'obsidian', name: 'Obsidian', icon: 'some-icon'}, {}, brands, marks), logo('obsidian'));
+  assert.equal(cp(glyphs.look({id: 'q', name: 'Files', icon: 'some-icon'}, {}, brands, marks)), 'U+F024B');
+  assert.equal(cp(glyphs.look({id: 'q', name: 'Qq', icon: 'empty'}, {}, brands, marks)), 'U+F0C1D');
+});
+
+test('a logo becomes an SVG filled with the given color', () => {
+  const url = glyphs.svgUrl('M0 0h24v24H0z', '#ffaa00');
+  assert.ok(url.startsWith('data:image/svg+xml;utf8,'));
+  const svg = decodeURIComponent(url.slice(24));
+  assert.match(svg, /viewBox="0 0 24 24"/);
+  assert.match(svg, /<path fill="#ffaa00" d="M0 0h24v24H0z"\/>/);
+  assert.match(decodeURIComponent(glyphs.svgUrl('M0 0Z', '#fff', true).slice(24)), /fill-rule="evenodd"/);
+});
+
+test('parse keeps icon overrides as strings of a sane length', () => {
+  const d = config.parse(JSON.stringify({dockSymbols: {a: 'f048b', b: 7, c: 'M' + '1'.repeat(20000), p: 'M0 0h24v24H0z'}})).dockSymbols;
+  assert.deepEqual(d, {a: 'f048b', p: 'M0 0h24v24H0z'});
   assert.deepEqual(config.parse(JSON.stringify({dockSymbols: ['f048b']})).dockSymbols, {});
   assert.deepEqual(config.defaults().dockSymbols, {});
 });

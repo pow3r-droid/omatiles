@@ -18,6 +18,23 @@ spec = importlib.util.spec_from_file_location('backend', ROOT / 'backend.py')
 backend = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(backend)
 
+spec = importlib.util.spec_from_file_location('icontrace', ROOT / 'icontrace.py')
+icontrace = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(icontrace)
+
+def png(path, w, h, pixel, filt=0):
+    """Write an RGBA PNG whose pixel (x, y) is pixel(x, y), every row using filter `filt`."""
+    import struct, zlib
+    raw = b''
+    for y in range(h):
+        line = bytes(c for x in range(w) for c in pixel(x, y))
+        if filt == 1:
+            line = bytes((line[i] - (line[i - 4] if i >= 4 else 0)) & 255 for i in range(len(line)))
+        raw += bytes([filt]) + line
+    chunk = lambda k, d: struct.pack('>I', len(d)) + k + d + struct.pack('>I', zlib.crc32(k + d) & 0xffffffff)
+    Path(path).write_bytes(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 6, 0, 0, 0))
+                           + chunk(b'IDAT', zlib.compress(raw)) + chunk(b'IEND', b''))
+
 def done(out='', err='', code=0):
     return subprocess.CompletedProcess([], code, out, err)
 
@@ -782,6 +799,88 @@ class CompatTests(Base):
         backend.store()
         self.assertEqual(json.loads((self.cache / 'compat.json').read_text()), {'a/b': {'phone': False, 'missing': []}})
         self.assertEqual(self.run_mock.call_args[0][0], ['pacman', '-Qq'])
+
+class TraceTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.dir = Path(self.tmp.name)
+
+    def box(self, d):
+        nums = [float(v) for v in __import__('re').findall(r'-?\d+(?:\.\d+)?', d)]
+        xs, ys = nums[0::2], nums[1::2]
+        return min(xs), max(xs), min(ys), max(ys)
+
+    def test_a_shape_on_nothing_is_traced_from_its_transparency(self):
+        f = self.dir / 'dot.png'
+        png(f, 64, 64, lambda x, y: (200, 30, 30, 255) if (x - 32) ** 2 + (y - 32) ** 2 < 15 ** 2 else (0, 0, 0, 0), filt=1)
+        d = icontrace.trace(f)
+        self.assertTrue(d.startswith('M') and d.endswith('Z'), d[:40])
+        x0, x1, y0, y1 = self.box(d)
+        # centered and filling the 24 x 24 box
+        self.assertAlmostEqual(x0, 0, delta=0.6); self.assertAlmostEqual(x1, 24, delta=0.6)
+        self.assertAlmostEqual(y0, 0, delta=0.6); self.assertAlmostEqual(y1, 24, delta=0.6)
+
+    def test_a_shape_on_a_tile_is_what_differs_from_the_tile(self):
+        f = self.dir / 'tile.png'
+        def px(x, y):
+            if 22 <= x < 42 and 12 <= y < 52:
+                return (20, 20, 20, 255)  # a dark bar on a white tile
+            return (250, 250, 250, 255)
+        png(f, 64, 64, px)
+        x0, x1, y0, y1 = self.box(icontrace.trace(f))
+        # the bar is twice as tall as wide: it fills the height, half the width
+        self.assertAlmostEqual(y1 - y0, 24, delta=0.6)
+        self.assertAlmostEqual(x1 - x0, 12, delta=1.2)
+
+    def test_no_clear_shape_gives_nothing(self):
+        empty, full, noise = self.dir / 'e.png', self.dir / 'f.png', self.dir / 'n.png'
+        png(empty, 32, 32, lambda x, y: (0, 0, 0, 0))
+        png(full, 32, 32, lambda x, y: (90, 90, 90, 255))
+        import random
+        r = random.Random(4)
+        png(noise, 64, 64, lambda x, y: (r.randrange(256), r.randrange(256), r.randrange(256), 255))
+        for f in (empty, full, noise):
+            self.assertEqual(icontrace.trace(f), '', f.name)
+
+    def test_not_a_png_or_too_big_raises(self):
+        bad = self.dir / 'bad.png'
+        bad.write_bytes(b'GIF89a')
+        with self.assertRaises(ValueError):
+            icontrace.read_png(bad)
+
+
+class MarksTests(Base):
+    def test_the_backend_never_writes_bytecode_into_the_plugin(self):
+        # Omarchy reloads a plugin when a file in its folder changes; a __pycache__ would do that.
+        src = (ROOT / 'backend.py').read_text()
+        self.assertLess(src.index('sys.dont_write_bytecode = True'), src.index('def tracer('))
+
+    def test_icon_names_are_looked_up_only_inside_icon_folders(self):
+        apps = Path.home() / '.local/share/icons/hicolor/64x64/apps'
+        apps.mkdir(parents=True)
+        png(apps / 'demo.png', 4, 4, lambda x, y: (0, 0, 0, 255))
+        big = Path.home() / '.local/share/icons/hicolor/256x256/apps'
+        big.mkdir(parents=True)
+        png(big / 'demo.png', 4, 4, lambda x, y: (0, 0, 0, 255))
+        with patch.dict(os.environ, {'XDG_DATA_DIRS': str(Path(self.tmp.name) / 'none')}):
+            self.assertEqual(backend.icon_png('demo'), big / 'demo.png')
+            for bad in ('../demo', 'a/b', 'demo\n', '', '.' * 300):
+                self.assertIsNone(backend.icon_png(bad), repr(bad))
+
+    def test_marks_are_cached_by_file_and_skip_unknown_icons(self):
+        apps = Path.home() / '.local/share/icons/hicolor/64x64/apps'
+        apps.mkdir(parents=True)
+        png(apps / 'dot.png', 64, 64, lambda x, y: (9, 9, 9, 255) if (x - 32) ** 2 + (y - 32) ** 2 < 200 else (0, 0, 0, 0))
+        with patch.dict(os.environ, {'XDG_DATA_DIRS': str(Path(self.tmp.name) / 'none')}):
+            backend.marks(['dot', 'missing', 7])
+            first = json.loads((self.cache / 'marks.json').read_text())
+            self.assertEqual(list(first), ['dot'])
+            self.assertTrue(first['dot']['path'].startswith('M'))
+            with patch.object(backend, 'tracer', side_effect=AssertionError('traced again')):
+                backend.marks(['dot'])
+            self.assertEqual(json.loads((self.cache / 'marks.json').read_text()), first)
+
 
 class MiscTests(Base):
     def test_new_chat_removes_session_and_log(self):

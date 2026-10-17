@@ -12,9 +12,11 @@
 - **A full desk still takes a new widget:** it goes on the desk you're looking at and, when nothing is free, sits on
   top of the other tiles, drawn solid. Arrange mode opens so you can drag it into place or remove a tile. Sending a
   tile to a full desk works the same way. New widgets no longer spill onto another desk.
-- **Symbol dock icons:** the themed dock is now an icon pack, like a phone's: one Nerd Font symbol per app in the
-  bar's color, not a tint over the real icon. Apps are matched by name, desktop id, icon or menu category. Apps with
-  no symbol show their initial in a circle. `dockSymbols` sets any app's symbol.
+- **Themed dock icons, like a phone's icon pack:** each app is drawn flat in the bar's color, not tinted over its
+  picture. It gets its real logo (about 80 apps, from Simple Icons, CC0), or a Nerd Font symbol for generic tools.
+  Any other app gets its own shape, traced once from its PNG icon (`icontrace.py`, standard library only) and cached
+  in `marks.json`. `dockSymbols` sets any app's icon: a logo name, an SVG path or a symbol.
+- The backend no longer writes Python bytecode into the plugin folder, which made Omarchy reload the plugin.
 
 ## 2.0.0 (2026-10-17)
 

@@ -38,9 +38,9 @@ function parse(raw) {
     ['dockMono','menuHint'].forEach(function(k){ if(typeof input[k]==='boolean') base[k]=input[k]; });
     if(typeof input.desks==='number' && isFinite(input.desks)) base.desks=clampInt(input.desks,1,PAGES);
     if(['auto','metric','imperial'].indexOf(input.units)!==-1) base.units=input.units;
-    // Per-app symbol overrides: desktop id or app name -> a symbol or its hex code.
+    // Per-app icon overrides: desktop id or app name -> a logo slug, an SVG path, a symbol or its hex code.
     if(input.dockSymbols && typeof input.dockSymbols==='object' && !Array.isArray(input.dockSymbols))
-        Object.keys(input.dockSymbols).slice(0,64).forEach(function(k){ var v=input.dockSymbols[k]; if(typeof v==='string' && v.length<=12) base.dockSymbols[k]=v; });
+        Object.keys(input.dockSymbols).slice(0,64).forEach(function(k){ var v=input.dockSymbols[k]; if(typeof v==='string' && v.length<=12000) base.dockSymbols[k]=v; });
     if(Array.isArray(input.dock)) base.dock=input.dock.filter(function(d){return typeof d==='string' && d.length>0;}).slice(0,24);
     if(input.local && typeof input.local==='object') base.local.services=services(input.local.services);
     var r=input.remote;

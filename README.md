@@ -23,8 +23,8 @@ dashboard is always a glance away.
   (the same ones the Android launcher uses), plus your own, written by Claude Code
   from one sentence.
 - **Dock:** your pinned apps, then the ones you used recently. Like a phone's themed
-  icon pack, the icons can be one-color symbols in your bar's color, drawn from the
-  Nerd Font Omarchy already uses.
+  icon pack, the icons can be drawn flat in your bar's color: each app's own logo, or,
+  for apps no logo set has, its own shape traced from its icon.
 
 Floating pop-ups, like the volume or Wi-Fi panels, can still open over the dashboard.
 If you move a window onto a tile desktop yourself (Super+Shift+1), the desk sits under
@@ -152,12 +152,14 @@ Everything below is optional:
 - **units:** `auto` follows your locale, or set `metric` or `imperial`. Times follow
   your locale's 12 or 24 hour clock.
 - **dock:** desktop entry ids, without `.desktop`.
-- **dockMono:** `true` draws the dock as symbols. Common apps have one built in (browsers,
-  terminals, chat apps, editors and more). Others get one from their menu category, or
-  show their initial in a circle.
-- **dockSymbols:** pick the symbol for an app. Use its desktop id or name as the key,
-  and the symbol's code from the [Nerd Fonts cheat sheet](https://www.nerdfonts.com/cheat-sheet)
-  (`f048b` or `U+F048B`), or paste the symbol itself.
+- **dockMono:** `true` draws the dock in the bar's color. About 80 common apps get their
+  logo from [Simple Icons](https://simpleicons.org). Generic tools (files, calculator,
+  some terminals) get a Nerd Font symbol. Any other app gets its own shape, traced once
+  from its PNG icon and cached. An app with no usable icon shows its initial in a circle.
+- **dockSymbols:** pick the icon for an app. Use its desktop id or name as the key. The
+  value can be a Simple Icons name that OmaTiles ships (`hp`, `github`…), a 24 x 24 SVG
+  path (`M…`), a symbol's code from the [Nerd Fonts cheat sheet](https://www.nerdfonts.com/cheat-sheet)
+  (`f048b` or `U+F048B`), or the symbol itself.
 - **local.services and remote.services:** up to six systemd units each, glob patterns
   allowed. `user` defaults to `true` (a `--user` unit); use `false` for system units.
   The card shows how many matching units are running. This machine's card also shows
@@ -249,3 +251,6 @@ Basecamp, Anthropic, OpenAI, xAI or Nous Research.
 ## License
 
 MIT
+
+Brand logos in the dock come from [Simple Icons](https://simpleicons.org) (CC0; see `brands/`).
+The logos are trademarks of their owners.
