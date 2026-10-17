@@ -1,0 +1,221 @@
+# OmaTiles
+
+A tile desk for Omarchy. Workspaces 1, 2 and 3 each get a 16 x 8 grid of tiles
+above an app dock, drawn in your current Omarchy theme and following it when you
+switch themes. It works like the home screen of the Omarchy Android launcher.
+
+- **Built-in tiles:** a seven-segment clock in your bar's color, date and weather, sun & moon,
+  Google Calendar, a fastfetch-style card for this machine, and an optional card for a
+  remote machine.
+- **Chat tiles:** one each for Claude Code, Codex, Grok and Hermes. Each keeps its
+  conversation, and *terminal* opens the full CLI on the same thread.
+- **Widgets:** the reviewed widgets from the [OWL widget store](https://github.com/SimonSchubert/omarchy-widgets)
+  (the same ones the Android launcher uses), plus your own, written by Claude Code
+  from one sentence.
+- **Dock:** your pinned apps, then the ones you used recently. Icons can be tinted in
+  the theme's accent color.
+
+The desk sits under your windows. When a tiled window covers it, it stops
+animating and polling.
+
+## Install
+
+```sh
+omarchy plugin add https://github.com/pow3r-droid/omatiles --enable
+```
+
+Or clone it into `~/.config/omarchy/plugins/io.github.pow3r-droid.omatiles`, then run
+`omarchy plugin enable io.github.pow3r-droid.omatiles`.
+
+It needs Omarchy 4 (Quickshell shell), Python 3 and curl. Everything else is optional:
+
+- `ssh` for the remote card and remote chats
+- the agent CLIs for chat tiles
+- Java and the `claude` CLI for creating widgets
+- a Google OAuth client for the calendar
+
+## Removal
+
+```sh
+omarchy plugin remove io.github.pow3r-droid.omatiles
+```
+
+Then, if you want to remove its settings and data too:
+
+```sh
+rm -rf ~/.config/omarchy/omatiles.json ~/.config/omarchy/omatiles ~/.cache/omatiles ~/.cache/omatiles-chat
+```
+
+## Using it
+
+**Right-click** anywhere on the desk for the menu:
+
+- **arrange tiles:** drag a tile to move it, drag its corner to resize it, and use
+  **→ N** to send it to the next desk. **✕** removes it, and **undo** appears for
+  ten seconds.
+- **widget store:** browse, search and add widgets. The *built in* section brings back
+  hidden tiles. Each store widget shows what it installs and runs before you add it.
+- **new widget with claude:** describe a widget. Claude Code writes it, the store's
+  checker reviews it, and it lands on a free spot.
+- **dock icons: theme color / full color**
+- **theme:** switch Omarchy themes from the desk.
+
+Many store widgets open their own screen (settings or detail view) when you click
+them, as on the phone. **Right-click a dock icon** to pin or unpin it.
+
+### Keyboard
+
+The desk lives under your windows, so it takes the keyboard only when you ask. Add
+bindings to `~/.config/hypr/bindings.lua`:
+
+```lua
+o.bind("SUPER + ALT + D", "OmaTiles keyboard mode", "qs ipc -p /usr/share/omarchy/shell call omatiles focus")
+o.bind("SUPER + ALT + W", "OmaTiles widget store", "qs ipc -p /usr/share/omarchy/shell call omatiles store")
+```
+
+In keyboard mode:
+
+| Key | Does |
+|---|---|
+| Arrows, Tab | pick a tile |
+| Enter | use it: focus a chat, open a widget's screen, refresh a machine card, add a calendar event |
+| M | menu |
+| S | store |
+| A | arrange |
+| Esc | close what's open, then leave keyboard mode |
+
+The other IPC calls are `menu`, `store`, `arrange`, `create` and `close`.
+
+## Settings
+
+Settings live in `~/.config/omarchy/omatiles.json`. The desk creates the file on first
+run and reloads it when it changes. The desk writes tile positions there itself.
+Everything below is optional:
+
+```json
+{
+  "units": "auto",
+  "dockMono": false,
+  "dock": ["chromium", "com.mitchellh.ghostty", "obsidian"],
+
+  "local": {
+    "services": [{"label": "Dictation", "unit": "voxtype.service"}]
+  },
+
+  "remote": {
+    "host": "me@server",
+    "name": "server",
+    "services": [
+      {"label": "Web", "unit": "nginx.service", "user": false},
+      {"label": "Jobs", "unit": "worker-*.service"}
+    ],
+    "link": {"label": "Open dashboard", "url": "http://server:8080"}
+  },
+
+  "chat": {
+    "host": "",
+    "where": "",
+    "agents": {
+      "hermes": {"name": "Hermes", "profile": ""},
+      "claude": {"open": "claude"}
+    }
+  },
+
+  "calendar": {"subscribe": [], "skip": []}
+}
+```
+
+- **units:** `auto` follows your locale, or set `metric` or `imperial`. Times follow
+  your locale's 12 or 24 hour clock.
+- **dock:** desktop entry ids, without `.desktop`.
+- **local.services and remote.services:** up to six systemd units each, glob patterns
+  allowed. `user` defaults to `true` (a `--user` unit); use `false` for system units.
+  The card shows how many matching units are running. This machine's card also shows
+  Tailscale and the battery when present.
+- **remote:**
+  - `host` is a `user@host` or an ssh alias. Key authentication is required (BatchMode).
+  - The remote card reads the machine only when you press **refresh**. It never polls.
+    Reads share one ssh connection for six minutes, so the machine sees a single login.
+  - `link` adds a button that opens a URL.
+- **chat:**
+  - With `host` empty, the agents run on this machine.
+  - Set `host` to run them over ssh on another machine. `where` names that machine in
+    the tiles.
+  - `agents.<id>.name` renames a tile.
+  - `hermes.profile` picks a Hermes profile.
+  - `open` replaces the command that **terminal** runs.
+- **calendar:** `subscribe` adds calendar ids to your list. `skip` hides calendars by name.
+
+### Calendar
+
+The calendar uses your own Google OAuth client, so no third party sees your data:
+
+1. In Google Cloud Console, create a project and enable the Google Calendar API.
+2. Create an OAuth client of type **Desktop app** and download its JSON.
+3. Save the JSON as `~/.config/omarchy/omatiles/google_client.json`.
+4. Click **Connect Google Calendar** on the tile. Sign-in uses a loopback redirect with PKCE.
+   The token is saved beside the client with mode 600.
+
+Events sync every five minutes. You get a desktop notification ten minutes before
+each event. **+** adds an event to your primary calendar.
+
+## What it runs
+
+Everything runs as you. Nothing needs root. The desk runs:
+
+- **Machine cards:** a read-only shell probe that reads `/proc`, `/sys`, `df`,
+  `pacman -Qq`, `systemctl list-units` for your configured units, `docker ps`
+  if present, and `tailscale ip`. It runs locally every minute while the card is on
+  screen. On the remote machine it runs once per refresh, over ssh.
+- **Chat tiles:** each turn runs the agent's CLI with the prompt on stdin. No one
+  is there to approve tools, so tools are limited:
+  - Claude Code: web search and fetch only (`--tools WebSearch,WebFetch`)
+  - Codex: its read-only sandbox (`-s read-only`)
+  - Grok: web search only
+  - Hermes: runs as its profile is configured, since its tools are set per profile.
+    Point `profile` at one you trust unattended.
+
+  Local turns run in `~/.cache/omatiles-chat/<agent>`. **terminal** opens the
+  interactive CLI, with its usual approvals.
+- **Weather:** [wttr.in](https://wttr.in) for Omarchy's weather location, at most every 30 minutes.
+- **Store:** downloads the store's index (at most hourly). Each widget's files are
+  checked against the index's SHA-256 before install. Store packages a widget
+  needs are listed, never installed for you.
+- **New widgets:** Claude Code (Sonnet) writes one OWL file in the widget's own folder,
+  and the vendored `owl.jar` checker reviews it. Claude Code runs with only its Read,
+  Write and Edit tools, without your Claude settings or MCP servers.
+
+Removed widgets stay in `~/.config/omarchy/omatiles/widgets/.trash` for a day.
+
+## Files
+
+| Path | What |
+|---|---|
+| `~/.config/omarchy/omatiles.json` | settings and layout |
+| `~/.config/omarchy/omatiles/widgets/` | installed and Claude-made widgets |
+| `~/.config/omarchy/omatiles/google_*.json` | your Google client and token |
+| `~/.cache/omatiles/` | machine, weather, calendar and store caches; chat transcripts |
+
+## Development
+
+```sh
+tests/check.sh
+```
+
+This runs the manifest and safety checks, the JavaScript model tests, the backend
+tests and `omarchy plugin validate`. After changing QML, run `omarchy restart shell`.
+The service stays loaded, so a hot reload serves the old code.
+
+## Credits
+
+- [Simon Schubert](https://github.com/SimonSchubert) made the OWL widget language,
+  the store and its Quickshell runtime. They are vendored in `owl/` under MIT; see
+  `owl/VENDORED.txt` for the one local patch.
+- The layout and widgets follow the Omarchy Android launcher.
+
+OmaTiles is a community plugin. It is not affiliated with or endorsed by Omarchy,
+Basecamp, Anthropic, OpenAI, xAI or Nous Research.
+
+## License
+
+MIT

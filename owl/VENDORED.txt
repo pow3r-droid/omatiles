@@ -1,0 +1,2 @@
+Vendored from github.com/SimonSchubert/omarchy-widgets runtimes/quickshell at 0741f7f on 2026-10-16 (MIT, see LICENSE here). LANGUAGE.md and owl.jar (the store's checker) come from docs/ and tools/.
+Local patch: OwlWidget.qml gains `maxFps` (a frame-rate cap for animated widgets; 0 keeps every frame). The desk sets 30.

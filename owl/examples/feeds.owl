@@ -1,0 +1,96 @@
+widget "feeds" {
+  meta { description: "The newest posts from the RSS and Atom feeds listed in ~/.config/omarchy-proot/feeds, starting with Arch Linux news"; version: "1.1"; license: "MIT"; category: "news" }
+  size: 6x4
+  minSize: 4x3
+
+  requires { pacman: ["python"] }
+
+  // One feed URL per line. Fetched in parallel and merged, newest first; unreachable feeds are skipped.
+  source items = cmd("""
+    f=~/.config/omarchy-proot/feeds
+    mkdir -p "${f%/*}"
+    [ -f "$f" ] || printf 'https://archlinux.org/feeds/news/\nhttps://github.com/omacom/omarchy/releases.atom\n' > "$f"
+    grep -v '^#' "$f" | grep . | python3 -c '
+import sys, json, urllib.request, xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from email.utils import parsedate_to_datetime
+
+A = "{http://www.w3.org/2005/Atom}"
+
+def when(s):
+    try:
+        return int(parsedate_to_datetime(s).timestamp())
+    except Exception:
+        try:
+            return int(datetime.fromisoformat(s.strip().replace("Z", "+00:00")).timestamp())
+        except Exception:
+            return 0
+
+def text(e, *tags):
+    for t in tags:
+        x = e.find(t)
+        if x is not None and x.text:
+            return " ".join(x.text.split())
+    return ""
+
+def fetch(url):
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "omarchy-proot feeds widget"})
+        root = ET.fromstring(urllib.request.urlopen(req, timeout=10).read())
+    except Exception:
+        return []
+    out = []
+    ch = root.find("channel")
+    if ch is not None:
+        feed = text(ch, "title")
+        for i in ch.findall("item"):
+            out.append({"title": text(i, "title"), "url": text(i, "link"), "at": when(text(i, "pubDate")), "feed": feed})
+    else:
+        feed = text(root, A + "title")
+        for e in root.findall(A + "entry"):
+            link = e.find(A + "link[@rel=\"alternate\"]")
+            if link is None:
+                link = e.find(A + "link")
+            out.append({"title": text(e, A + "title"), "url": link.get("href") if link is not None else "", "at": when(text(e, A + "published", A + "updated")), "feed": feed})
+    return out
+
+urls = [l.strip() for l in sys.stdin if l.strip()]
+with ThreadPoolExecutor(8) as pool:
+    posts = [p for ps in pool.map(fetch, urls) for p in ps]
+posts.sort(key=lambda p: -p["at"])
+print(json.dumps(posts[:40]))
+'
+  """) every 30m json timeout 30s
+  source now = clock every 60s
+
+  Column {
+    gap: 4
+    Row {
+      onTap: terminal('$EDITOR ~/.config/omarchy-proot/feeds', "feeds")
+      Text { text: "feeds"; style: muted; weight: 1 }
+      Text { text: "edit"; fontSize: 11; color: muted; width: 40; align: end }
+    }
+    if items != null && len(items) == 0 { Text { text: "nothing loaded: tap edit to check the feed list"; style: small } }
+    Column {
+      scroll: true
+      weight: 1
+      gap: 6
+      for p in items key p.url {
+        let age = now - p.at
+        Column {
+          gap: 0
+          onTap: url(p.url)
+          Text { text: p.title; fontSize: 13; maxLines: 2 }
+          Row {
+            Text { text: p.feed; fontSize: 10; color: accent; maxLines: 1; weight: 1 }
+            Text {
+              text: p.at == 0 ? "" : age < 3600 ? "${max(floor(age / 60), 1)}m" : age < 86400 ? "${floor(age / 3600)}h" : "${floor(age / 86400)}d"
+              fontSize: 10; color: muted; width: 40; align: end
+            }
+          }
+        }
+      }
+    }
+  }
+}

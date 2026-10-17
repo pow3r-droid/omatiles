@@ -1,0 +1,797 @@
+import contextlib
+import hashlib
+import importlib.util
+import io
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import time
+sys.dont_write_bytecode = True
+import unittest
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parent.parent
+spec = importlib.util.spec_from_file_location('backend', ROOT / 'backend.py')
+backend = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(backend)
+
+def done(out='', err='', code=0):
+    return subprocess.CompletedProcess([], code, out, err)
+
+class Base(unittest.TestCase):
+    """Every path points into a temp dir and subprocess.run is a mock that fails unless set."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name).resolve()
+        self.cache, self.config = root / 'cache', root / 'config'
+        data = self.config / 'omatiles'
+        for name, value in (('CACHE', self.cache), ('CONFIG', self.config), ('DATA', data),
+                            ('WIDGETS', data / 'widgets'), ('TRASH', data / 'widgets' / '.trash')):
+            p = patch.object(backend, name, value); p.start(); self.addCleanup(p.stop)
+        self.widgets, self.trash = data / 'widgets', data / 'widgets' / '.trash'
+        self.config.mkdir(parents=True); self.cache.mkdir(parents=True)
+        home = patch.object(backend.Path, 'home', return_value=root / 'home'); home.start(); self.addCleanup(home.stop)
+        runner = patch.object(backend.subprocess, 'run', side_effect=AssertionError('unmocked subprocess.run'))
+        self.run_mock = runner.start(); self.addCleanup(runner.stop)
+
+    def sub(self, result):
+        self.run_mock.side_effect = None
+        self.run_mock.return_value = result
+
+    def write_config(self, config):
+        (self.config / backend.CONFIG_FILE).write_text(json.dumps(config))
+
+    def read_config(self):
+        return json.loads((self.config / backend.CONFIG_FILE).read_text())
+
+    def tiles(self):
+        return self.read_config()['tiles']
+
+    def call(self, fn, *args, **kwargs):
+        """(printed json or None, exit code or None)"""
+        out, code = io.StringIO(), None
+        with contextlib.redirect_stdout(out):
+            try:
+                fn(*args, **kwargs)
+            except SystemExit as e:
+                code = e.code
+        text = out.getvalue().strip()
+        return (json.loads(text) if text else None), code
+
+class PlaceTests(Base):
+    def test_place_updates_one_tile_with_integer_geometry_and_keeps_others(self):
+        self.write_config({'tiles': {'clock': {'enabled': True, 'col': 0, 'row': 0, 'w': 5, 'h': 4},
+                                     'weather': {'enabled': True, 'col': 0, 'row': 4, 'w': 5, 'h': 4}}})
+        backend.place('clock', json.dumps({'col': 2.7, 'row': -1, 'w': 'x', 'h': 3, 'bogus': 9, 'enabled': False}))
+        tiles = self.tiles()
+        self.assertEqual(tiles['clock'], {'enabled': True, 'col': 2, 'row': 0, 'w': 5, 'h': 3})
+        self.assertIsInstance(tiles['clock']['col'], int)
+        self.assertEqual(tiles['weather'], {'enabled': True, 'col': 0, 'row': 4, 'w': 5, 'h': 4})
+
+    def test_place_creates_missing_tile_enabled(self):
+        backend.place('owl:a/b', json.dumps({'col': 1, 'row': 2, 'w': 3, 'h': 4}))
+        self.assertEqual(self.tiles()['owl:a/b'], {'enabled': True, 'col': 1, 'row': 2, 'w': 3, 'h': 4})
+
+    def test_place_clamps_geometry_to_the_grid(self):
+        backend.place('clock', json.dumps({'col': 99, 'row': 99, 'w': 99, 'h': 99}))
+        t = self.tiles()['clock']
+        self.assertLessEqual(t['col'] + t['w'], backend.COLS)
+        self.assertLessEqual(t['row'] + t['h'], backend.ROWS)
+
+class DeskTests(Base):
+    def fill(self, page):
+        return {'enabled': True, 'page': page, 'col': 0, 'row': 0, 'w': 16, 'h': 8}
+
+    def test_default_tiles_are_occupied_and_hidden_ones_are_not(self):
+        self.assertIsNone(backend.free_spot({'tiles': {}}, 1, 1))
+        self.assertEqual(backend.free_spot({'tiles': {}}, 5, 4, page=2), (0, 0))
+        self.assertEqual(backend.free_spot({'tiles': {'clock': {'enabled': False}}}, 5, 4), (0, 0))
+        # a hidden tile frees its cells but its neighbour still blocks
+        self.assertIsNone(backend.free_spot({'tiles': {'clock': {'enabled': False}}}, 6, 4))
+        # default-off built-ins (remote, chat) occupy nothing
+        self.assertEqual(backend.DEFAULT_OFF, {'remote', 'chat-claude', 'chat-codex', 'chat-grok', 'chat-hermes'})
+
+    def test_full_page_shrinks_to_least_size(self):
+        self.write_config({'tiles': {'owl:a/fill': {'enabled': True, 'page': 2, 'col': 0, 'row': 0, 'w': 16, 'h': 6}}})
+        result = backend.put_on_desk('owl:a/new', (4, 4), page=2, least=(2, 2))
+        self.assertEqual((result['ok'], result['page'], result['w'], result['h'], result['shrunk']), (True, 2, 4, 2, True))
+        self.assertEqual(self.tiles()['owl:a/new'], {'enabled': True, 'col': 0, 'row': 6, 'w': 4, 'h': 2, 'page': 2})
+
+    def test_does_not_shrink_below_least(self):
+        self.write_config({'tiles': {'owl:a/fill': {'enabled': True, 'page': 2, 'col': 0, 'row': 0, 'w': 16, 'h': 7},
+                                     'owl:a/f3': self.fill(3)}})
+        result = backend.put_on_desk('owl:a/new', (4, 4), page=2, least=(4, 4))
+        self.assertFalse(result['ok'])
+        self.assertNotIn('owl:a/new', self.tiles())
+
+    def test_full_page_uses_next_page_and_page_one_has_no_page_key(self):
+        self.write_config({'tiles': {'owl:a/fill': self.fill(2)}})
+        result = backend.put_on_desk('owl:a/new', (4, 4), page=2)
+        self.assertEqual((result['ok'], result['page'], result['shrunk']), (True, 3, False))
+        self.assertEqual(self.tiles()['owl:a/new']['page'], 3)
+        self.write_config({'tiles': {k: {'enabled': False} for k in ('clock', 'local', 'calendar', 'weather', 'sun')}})
+        result = backend.put_on_desk('owl:a/p1', (4, 4), page=1)
+        self.assertEqual(result['page'], 1)
+        self.assertNotIn('page', self.tiles()['owl:a/p1'])
+
+    def test_all_pages_full_returns_not_ok(self):
+        self.write_config({'tiles': {'owl:a/f2': self.fill(2), 'owl:a/f3': self.fill(3)}})
+        result = backend.put_on_desk('owl:a/new', (4, 4), page=1, missing=['jq'])
+        self.assertEqual(result, {'ok': False, 'error': 'no room', 'missing': ['jq']})
+        self.assertNotIn('owl:a/new', self.tiles())
+
+class InstallTests(Base):
+    SOURCE = b'widget "x" {\n size: 4x2\n minSize: 2x1\n}\n'
+
+    def index(self, entries):
+        (self.cache / 'store.json').write_text(json.dumps({'widgets': entries}))
+
+    def curl_returns(self, body, code=0):
+        def fake(args, **kw):
+            if args[0] == 'pacman':
+                return done(code=1 if args[-1] == 'missingpkg' else 0)
+            return subprocess.CompletedProcess(args, code, body, b'')
+        self.run_mock.side_effect = fake
+
+    def test_install_checks_hash_then_places(self):
+        entry = {'id': 'al/clock-x', 'path': 'w/clock-x.owl', 'sha256': hashlib.sha256(self.SOURCE).hexdigest(),
+                 'requires': {'pacman': ['missingpkg', 'ok', 'Bad Name; x']}}
+        self.index([entry])
+        self.curl_returns(self.SOURCE)
+        out, code = self.call(backend.install, 'al/clock-x', 1)
+        self.assertIsNone(code)
+        self.assertTrue(out['ok'])
+        self.assertEqual(out['missing'], ['missingpkg'])
+        folder = self.widgets / 'al' / 'clock-x'
+        self.assertEqual((folder / 'widget.owl').read_bytes(), self.SOURCE)
+        self.assertEqual(json.loads((folder / 'store.json').read_text())['id'], 'al/clock-x')
+        self.assertEqual((out['w'], out['h']), (4, 2))
+        self.assertTrue(self.tiles()['owl:al/clock-x']['enabled'])
+        curl_call = self.run_mock.call_args_list[0].args[0]
+        self.assertEqual(curl_call[0], 'curl')
+        self.assertEqual(curl_call[-1], backend.STORE + 'w/clock-x.owl')
+
+    def test_hash_mismatch_installs_nothing(self):
+        self.index([{'id': 'al/clock-x', 'path': 'p.owl', 'sha256': '0' * 64}])
+        self.curl_returns(self.SOURCE)
+        out, code = self.call(backend.install, 'al/clock-x')
+        self.assertEqual(code, 1)
+        self.assertFalse(out['ok'])
+        self.assertFalse((self.widgets / 'al').exists())
+        self.assertFalse((self.config / backend.CONFIG_FILE).exists())
+
+    def test_download_failure_installs_nothing(self):
+        self.index([{'id': 'al/clock-x', 'path': 'p.owl', 'sha256': hashlib.sha256(self.SOURCE).hexdigest()}])
+        self.curl_returns(self.SOURCE, code=22)
+        out, code = self.call(backend.install, 'al/clock-x')
+        self.assertEqual(code, 1)
+        self.assertFalse((self.widgets / 'al').exists())
+
+    def test_path_traversal_and_unknown_ids_are_rejected(self):
+        evil = ['../../evil', 'a/../../x', '/etc/passwd', 'a/b/c', 'A/b', '', 'a/']
+        self.index([{'id': i, 'path': 'p.owl', 'sha256': hashlib.sha256(self.SOURCE).hexdigest()} for i in evil + ['al/real']])
+        self.curl_returns(self.SOURCE)
+        for widget_id in evil + ['al/missing']:
+            out, code = self.call(backend.install, widget_id)
+            self.assertEqual(code, 1, repr(widget_id))
+            self.assertEqual(out['error'], 'unknown widget', repr(widget_id))
+        self.run_mock.assert_not_called()
+        self.assertFalse(self.widgets.exists())
+
+class WidgetIdTests(Base):
+    def test_widget_id_rejects_a_trailing_newline(self):
+        self.assertIsNone(backend.WIDGET_ID.match('a/b\n'))
+        self.assertIsNone(backend.owl_folder('owl:a/b\n'))
+
+    def test_widget_id_shape(self):
+        for good in ('a/b', 'al-1/clock-2'):
+            self.assertTrue(backend.WIDGET_ID.match(good), good)
+        for bad in ('', 'a', 'a/b/c', '../x', 'a/..', 'A/b', 'a/b c', 'a/b;x', '/a/b'):
+            self.assertFalse(backend.WIDGET_ID.match(bad), bad)
+
+class TrashTests(Base):
+    def make_widget(self, author='al', name='w1', tile=None):
+        folder = self.widgets / author / name
+        folder.mkdir(parents=True)
+        (folder / 'widget.owl').write_text('widget "w1" {}')
+        (folder / 'store.json').write_text('{}')
+        self.write_config({'tiles': {'owl:%s/%s' % (author, name): tile or {}, 'clock': {'enabled': True}}})
+        return folder
+
+    def test_remove_then_restore_store_widget(self):
+        tile = {'enabled': True, 'col': 3, 'row': 1, 'w': 4, 'h': 2, 'page': 2}
+        folder = self.make_widget(tile=tile)
+        backend.remove('owl:al/w1')
+        slot = self.trash / 'al__w1'
+        self.assertFalse(folder.exists())
+        self.assertFalse(folder.parent.exists())  # the empty author folder goes too
+        self.assertEqual(json.loads((slot / '.tile.json').read_text()), tile)
+        self.assertTrue((slot / 'widget.owl').exists())
+        self.assertNotIn('owl:al/w1', self.tiles())
+        self.assertIn('clock', self.tiles())
+        backend.restore('owl:al/w1')
+        self.assertTrue((folder / 'widget.owl').exists())
+        self.assertFalse((folder / '.tile.json').exists())
+        self.assertFalse(slot.exists())
+        self.assertEqual(self.tiles()['owl:al/w1'], tile)
+
+    def test_remove_keeps_author_folder_with_other_widgets(self):
+        self.make_widget()
+        (self.widgets / 'al' / 'other').mkdir()
+        backend.remove('owl:al/w1')
+        self.assertTrue((self.widgets / 'al' / 'other').exists())
+
+    def test_builtin_only_toggles_enabled(self):
+        self.write_config({'tiles': {'clock': {'enabled': True, 'col': 1, 'row': 1, 'w': 5, 'h': 4}}})
+        backend.remove('clock')
+        self.assertEqual(self.tiles()['clock'], {'enabled': False, 'col': 1, 'row': 1, 'w': 5, 'h': 4})
+        self.assertFalse(self.trash.exists())
+        backend.restore('clock')
+        self.assertEqual(self.tiles()['clock']['enabled'], True)
+        backend.remove('remote')
+        self.assertEqual(self.tiles()['remote'], {'enabled': False})
+
+    def test_restore_without_a_slot_does_nothing(self):
+        self.write_config({'tiles': {}})
+        backend.restore('owl:al/none')
+        self.assertEqual(self.tiles(), {})
+
+    def test_remove_ignores_ids_that_are_not_widgets(self):
+        outside = self.widgets.parent / 'keep'
+        outside.mkdir(parents=True)
+        self.write_config({'tiles': {}})
+        backend.remove('owl:../keep')
+        self.assertTrue(outside.exists())
+
+    def test_prune_trash_removes_slots_older_than_a_day(self):
+        old, new = self.trash / 'a__old', self.trash / 'a__new'
+        old.mkdir(parents=True); new.mkdir(parents=True)
+        age = time.time() - 2 * 86400
+        os.utime(old, (age, age))
+        backend.prune_trash()
+        self.assertFalse(old.exists())
+        self.assertTrue(new.exists())
+
+    def test_prune_trash_without_trash_is_fine(self):
+        backend.prune_trash()
+
+class DockTests(Base):
+    def test_pin_and_unpin_edit_the_dock(self):
+        self.write_config({'tiles': {}, 'dock': ['a', 7, 'b']})
+        backend.pin('c', True)
+        self.assertEqual(self.read_config()['dock'], ['a', 'b', 'c'])
+        backend.pin('a', True)  # moves to the end, no duplicate
+        self.assertEqual(self.read_config()['dock'], ['b', 'c', 'a'])
+        backend.pin('b', False)
+        self.assertEqual(self.read_config()['dock'], ['c', 'a'])
+
+    def test_pin_rejects_slashes_newlines_and_empty(self):
+        self.write_config({'tiles': {}, 'dock': ['a']})
+        for bad in ('x/y', 'x\ny', 'x\ry', '', None):
+            backend.pin(bad, True)
+            backend.pin(bad, False)
+        self.assertEqual(self.read_config()['dock'], ['a'])
+
+    def test_recent_is_most_recent_first_unique_and_capped(self):
+        for i in range(20):
+            backend.recent('app%d' % i)
+        backend.recent('app5')
+        backend.recent('app5')
+        apps = json.loads((self.cache / 'recent.json').read_text())
+        self.assertEqual(apps[0], 'app5')
+        self.assertEqual(len(apps), 16)
+        self.assertEqual(len(set(apps)), 16)
+        self.assertEqual(apps[1], 'app19')
+        backend.recent('bad/id'); backend.recent('bad\nid'); backend.recent('')
+        self.assertEqual(json.loads((self.cache / 'recent.json').read_text()), apps)
+
+    def test_recent_survives_a_corrupt_file(self):
+        (self.cache / 'recent.json').write_text('{not json')
+        backend.recent('a')
+        self.assertEqual(json.loads((self.cache / 'recent.json').read_text()), ['a'])
+
+    def test_set_option_only_accepts_known_switches(self):
+        self.write_config({'tiles': {}})
+        backend.set_option('dockMono', 'true')
+        backend.set_option('menuHint', 'false')
+        backend.set_option('tiles', 'true')
+        backend.set_option('evil', 'true')
+        config = self.read_config()
+        self.assertIs(config['dockMono'], True)
+        self.assertIs(config['menuHint'], False)
+        self.assertIsInstance(config['tiles'], dict)
+        self.assertNotIn('evil', config)
+
+PROBE_OUT = '''os=Arch Linux
+who=me@box
+host=ACME Laptop
+kernel=6.1.0
+packages=812
+shell=bash 5.2
+cpuName=Some CPU
+stat1=cpu  100 0 100 800 0 0 0 0
+stat2=cpu  200 0 150 850 0 0 0 0
+uptime=93784.55
+memTotal=8000000000
+memAvail=2000000000
+disk=1000 250
+temp=45000
+battery=80 Discharging
+tailscale=active 100.64.1.2
+@@units
+0\tweb.service\tactive\trunning
+0\tweb2.service\tfailed\tfailed
+1\tgone.service\tinactive\tdead
+@@docker
+web\trunning\tUp 2 hours
+db\texited\tExited (0) 3 days ago
+@@failed
+bad.service
+worse.service
+'''
+
+class ProbeParseTests(Base):
+    SPEC = [{'label': 'Web', 'unit': 'web*.service', 'user': False}, {'unit': 'gone.service'}, {'unit': 'none.service'}]
+
+    def parse(self, out=PROBE_OUT, spec=SPEC):
+        return backend.probe_parse(out, spec)
+
+    def test_numbers(self):
+        d = self.parse()
+        self.assertTrue(d['ok'])
+        self.assertEqual(d['cpu'], 75.0)
+        self.assertEqual(d['uptime'], '1 day, 2:03')
+        self.assertEqual(d['mem'], 75.0)
+        self.assertEqual(d['memTotal'], 8e9)
+        self.assertEqual(d['disk'], 25.0)
+        self.assertEqual(d['diskSize'], 1000)
+        self.assertEqual(d['temp'], 45)
+        self.assertEqual(d['battery'], {'level': 80, 'status': 'Discharging'})
+        self.assertEqual((d['who'], d['os'], d['host'], d['kernel'], d['packages']), ('me@box', 'Arch Linux', 'ACME Laptop', '6.1.0', '812'))
+
+    def test_uptime_formats(self):
+        for secs, text in ((600, '0:10'), (3600, '1:00'), (172800 + 3 * 3600 + 5 * 60, '2 days, 3:05'), (86400, '1 day, 0:00')):
+            self.assertEqual(self.parse('uptime=%d\n' % secs)['uptime'], text, secs)
+
+    def test_missing_facts_are_none(self):
+        d = self.parse('os=x\n', ())
+        for key in ('cpu', 'mem', 'disk', 'temp', 'battery', 'tailscale'):
+            self.assertIsNone(d[key], key)
+        self.assertEqual((d['services'], d['containers'], d['failed']), ([], [], []))
+
+    def test_tailscale_states(self):
+        self.assertIsNone(self.parse('os=x\n')['tailscale'])
+        self.assertEqual(self.parse('tailscale=inactive \n')['tailscale'], '')
+        self.assertEqual(self.parse('tailscale=active \n')['tailscale'], '')
+        self.assertEqual(self.parse('tailscale=active 100.1.2.3\n')['tailscale'], '100.1.2.3')
+        self.assertEqual(self.parse(PROBE_OUT)['tailscale'], '100.64.1.2')
+
+    def test_services_counts(self):
+        s = self.parse()['services']
+        self.assertEqual(s, [{'label': 'Web', 'running': 1, 'units': 2},
+                             {'label': 'gone.service', 'running': 0, 'units': 1},
+                             {'label': 'none.service', 'running': 0, 'units': 0}])
+
+    def test_containers_and_failed(self):
+        d = self.parse()
+        self.assertEqual(d['containers'], [{'name': 'web', 'up': True, 'status': 'Up 2 hours'},
+                                           {'name': 'db', 'up': False, 'status': 'Exited (0) 3 days ago'}])
+        self.assertEqual(d['failed'], ['bad.service', 'worse.service'])
+
+    def test_battery_without_status(self):
+        self.assertEqual(self.parse('battery=55\n')['battery'], {'level': 55, 'status': ''})
+        self.assertIsNone(self.parse('battery=x y\n')['battery'])
+
+class ServicesTests(Base):
+    def test_rejects_bad_units_and_caps_at_six(self):
+        spec = [{'unit': 'ok.service'}, {'unit': 'a b'}, {'unit': 'x;y'}, {'unit': '$(id)'}, {'unit': ''}, {'unit': 5},
+                'str', None, {'label': 'L' * 60, 'unit': 'a@b.service', 'user': False}]
+        out = backend.services(spec)
+        self.assertEqual([s['unit'] for s in out], ['ok.service', 'a@b.service'])
+        self.assertEqual(out[0], {'label': 'ok.service', 'unit': 'ok.service', 'user': True})
+        self.assertEqual(len(out[1]['label']), 40)
+        self.assertIs(out[1]['user'], False)
+        self.assertEqual(len(backend.services([{'unit': 'u%d' % i} for i in range(10)])), 6)
+        self.assertEqual(backend.services('nope'), [])
+        self.assertEqual(backend.services(None), [])
+
+    def test_probe_script_quotes_units_and_picks_scope(self):
+        script = backend.probe_script([{'unit': 'a*.service', 'user': False}, {'unit': 'b.service'}])
+        self.assertIn("systemctl list-units --all --no-legend --plain 'a*.service'", script)
+        self.assertIn("systemctl --user list-units --all --no-legend --plain b.service", script)
+        self.assertNotIn('x;y', backend.probe_script([{'unit': 'x;y'}]))
+        self.assertTrue(script.startswith(backend.PROBE))
+        self.assertTrue(script.endswith(backend.PROBE_TAIL))
+
+class SshTests(Base):
+    def test_ssh_host_validation(self):
+        for good in ('hp', 'me@box.local', 'user@100.64.0.1', 'a_b-c:22'):
+            self.assertEqual(backend.ssh_host(good), good)
+        for bad in ('-oProxyCommand=x', '-v', 'a b', 'a;b', 'a\nb', '$(x)', '', None, 5, 'a|b', 'a`b`'):
+            self.assertEqual(backend.ssh_host(bad), '', repr(bad))
+
+    def test_ssh_base(self):
+        base = backend.ssh_base('me@box', 5)
+        self.assertEqual(base[0], 'ssh')
+        self.assertEqual(base[-1], 'me@box')
+        joined = ' '.join(base)
+        for needle in ('BatchMode=yes', 'ConnectTimeout=5', 'ControlMaster=auto', 'ControlPersist=6m'):
+            self.assertIn(needle, joined)
+        self.assertTrue(any(a.startswith('ControlPath=' + str(self.cache)) for a in base))
+        self.assertIn('ConnectTimeout=8', backend.ssh_base('h'))
+
+class ProbeTests(Base):
+    def test_remote_without_host_keeps_old_fields(self):
+        self.write_config({'tiles': {}, 'remote': {'host': '-oBad'}})
+        (self.cache / 'remote.json').write_text(json.dumps({'ok': True, 'os': 'Arch', 'cpu': 3.0}))
+        backend.probe('remote')
+        data = json.loads((self.cache / 'remote.json').read_text())
+        self.assertIs(data['ok'], False)
+        self.assertEqual((data['os'], data['cpu']), ('Arch', 3.0))
+        self.assertIn('error', data)
+        self.run_mock.assert_not_called()
+
+    def test_remote_with_host_runs_ssh_with_script_on_stdin(self):
+        spec = [{'unit': 'web.service'}]
+        self.write_config({'tiles': {}, 'remote': {'host': 'me@box', 'services': spec}})
+        self.sub(done(PROBE_OUT))
+        backend.probe('remote')
+        args, kwargs = self.run_mock.call_args
+        self.assertEqual(args[0], backend.ssh_base('me@box', 5) + ['bash -s'])
+        self.assertEqual(kwargs['input'], backend.probe_script(spec))
+        data = json.loads((self.cache / 'remote.json').read_text())
+        self.assertTrue(data['ok'])
+        self.assertEqual(data['cpu'], 75.0)
+        self.assertEqual(data['updatedAt'], data['seenAt'])
+        self.assertEqual(data['services'][0]['units'], 2)
+
+    def test_remote_failure_keeps_cache_and_throttle_blocks_a_second_call(self):
+        self.write_config({'tiles': {}, 'remote': {'host': 'box'}})
+        (self.cache / 'remote.json').write_text(json.dumps({'ok': True, 'os': 'Arch', 'seenAt': 5}))
+        self.sub(done('', 'ssh: Could not resolve hostname box', 255))
+        backend.probe('remote')
+        data = json.loads((self.cache / 'remote.json').read_text())
+        self.assertEqual((data['ok'], data['os'], data['seenAt']), (False, 'Arch', 5))
+        self.assertIn('resolve', data['error'])
+        backend.probe('remote')
+        self.assertEqual(self.run_mock.call_count, 1)  # throttled
+        (self.cache / 'remote.attempt').unlink()
+        backend.probe('remote')
+        self.assertEqual(self.run_mock.call_count, 2)
+
+    def test_remote_timeout_is_handled(self):
+        self.write_config({'tiles': {}, 'remote': {'host': 'box'}})
+        self.run_mock.side_effect = subprocess.TimeoutExpired('ssh', 25)
+        backend.probe('remote')
+        self.assertIs(json.loads((self.cache / 'remote.json').read_text())['ok'], False)
+
+    def test_local_probe_uses_bash_stdin(self):
+        self.write_config({'tiles': {}, 'local': {'services': [{'unit': 'x.service'}]}})
+        self.sub(done(PROBE_OUT))
+        backend.probe('local')
+        args, kwargs = self.run_mock.call_args
+        self.assertEqual(args[0], ['bash', '-s'])
+        self.assertIn('x.service', kwargs['input'])
+        self.assertTrue(json.loads((self.cache / 'local.json').read_text())['ok'])
+
+AGENT_OUT = {
+    'grok': 'hi\n',
+    'claude': '{"result":"hi","session_id":"s1"}',
+    'codex': '{"type":"thread.started","thread_id":"ab-12"}\n{"type":"item.completed","item":{"type":"agent_message","text":"hi"}}',
+    'hermes': '{"type":"result","session_id":"2026_x1","text":"hi"}',
+}
+
+class ChatTests(Base):
+    def log(self, agent):
+        return json.loads((self.cache / 'chat' / agent / 'log.json').read_text())
+
+    def session_file(self, agent):
+        return self.cache / 'chat' / agent / 'session'
+
+    def test_ask_local_sends_prompt_on_stdin_only(self):
+        secret = '--force "secret"; $(id)'
+        for agent, out in AGENT_OUT.items():
+            self.write_config({'tiles': {}})
+            self.sub(done(out))
+            _, code = self.call(backend.ask, agent, secret)
+            self.assertIsNone(code, agent)
+            args, kwargs = self.run_mock.call_args
+            self.assertEqual(args[0][:2], ['bash', '-lc'], agent)
+            self.assertEqual(len(args[0]), 3, agent)
+            self.assertNotIn('secret', ' '.join(args[0]), agent)
+            self.assertEqual(kwargs['input'], secret, agent)
+            self.assertIn('exec ', args[0][2], agent)
+            self.assertTrue(self.session_file(agent).read_text(), agent)
+
+    def test_ask_remote_runs_ssh_base_plus_line(self):
+        self.write_config({'tiles': {}, 'chat': {'host': 'me@box'}})
+        self.sub(done(AGENT_OUT['claude']))
+        self.call(backend.ask, 'claude', 'hello')
+        args, kwargs = self.run_mock.call_args
+        line = backend.wrap('claude', backend.turn_command('claude', '', {}))
+        self.assertEqual(args[0], backend.ssh_base('me@box') + [line])
+        self.assertEqual(kwargs['input'], 'hello')
+
+    def test_ask_with_unsafe_host_runs_locally(self):
+        self.write_config({'tiles': {}, 'chat': {'host': '-oProxyCommand=x'}})
+        self.sub(done(AGENT_OUT['claude']))
+        self.call(backend.ask, 'claude', 'hello')
+        self.assertEqual(self.run_mock.call_args.args[0][:2], ['bash', '-lc'])
+
+    def test_turn_commands_stay_read_only(self):
+        c = backend.turn_command('claude', '', {})
+        self.assertIn('--tools WebSearch,WebFetch', c)
+        self.assertNotIn('--resume', c)
+        self.assertIn('--resume s1', backend.turn_command('claude', 's1', {}))
+        c = backend.turn_command('codex', '', {})
+        self.assertIn('-s read-only', c)
+        self.assertTrue(c.endswith(' -'))
+        c = backend.turn_command('codex', 'ab-12', {})
+        self.assertIn('sandbox_mode="read-only"', c)
+        self.assertIn('resume', c)
+        self.assertIn('ab-12', c)
+        c = backend.turn_command('grok', '', {})
+        for flag in ('--tools web_search', '--permission-mode dontAsk', '--disallowed-tools search_tool,use_tool', '--prompt-file /dev/stdin'):
+            self.assertIn(flag, c)
+        self.assertNotIn(' -c', c)
+        self.assertIn(' -c', backend.turn_command('grok', 'continue', {}))
+        c = backend.turn_command('hermes', '', {})
+        self.assertIn('--query-file /dev/stdin', c)
+        self.assertTrue(c.startswith('hermes chat'))
+        with self.assertRaises(ValueError):
+            backend.turn_command('nope', '', {})
+
+    def test_no_turn_command_has_dangerous_flags(self):
+        for agent in backend.AGENTS:
+            c = backend.turn_command(agent, 'abc', {'hermes': {'profile': 'x'}})
+            for bad in ('--dangerously', 'bypass', 'danger-full-access', '--yolo', 'acceptEdits'):
+                self.assertNotIn(bad, c, agent)
+
+    def test_hermes_profile(self):
+        self.assertIn('hermes -p x chat', backend.turn_command('hermes', '', {'hermes': {'profile': 'x'}}))
+        self.assertNotIn(' -p ', backend.turn_command('hermes', '', {}))
+        self.assertNotIn(' -p ', backend.turn_command('hermes', '', {'hermes': {'profile': 'x; y'}}))
+        self.assertIn('--resume 2026_x1', backend.turn_command('hermes', '2026_x1', {}))
+        self.assertIn(' -p x', backend.app_command('hermes', '', {'hermes': {'profile': 'x'}}))
+
+    def test_success_writes_session_and_log(self):
+        self.write_config({'tiles': {}})
+        self.sub(done(AGENT_OUT['claude']))
+        self.call(backend.ask, 'claude', '  what is up  ')
+        self.assertEqual(self.session_file('claude').read_text(), 's1')
+        log = self.log('claude')
+        self.assertEqual([(e['who'], e['text']) for e in log], [('you', 'what is up'), ('agent', 'hi')])
+        self.assertNotIn('error', log[1])
+        self.assertIsInstance(log[0]['at'], int)
+        # the next turn resumes that session
+        self.call(backend.ask, 'claude', 'again')
+        self.assertIn('--resume s1', self.run_mock.call_args.args[0][2])
+        self.assertEqual(len(self.log('claude')), 4)
+
+    def test_codex_hermes_and_grok_replies_are_parsed(self):
+        self.write_config({'tiles': {}})
+        for agent, session in (('codex', 'ab-12'), ('hermes', '2026_x1'), ('grok', 'continue')):
+            self.sub(done(AGENT_OUT[agent]))
+            self.call(backend.ask, agent, 'q')
+            self.assertEqual(self.session_file(agent).read_text(), session)
+            self.assertEqual(self.log(agent)[-1]['text'], 'hi')
+
+    def test_unsafe_session_id_is_not_stored(self):
+        self.write_config({'tiles': {}})
+        self.sub(done('{"result":"hi","session_id":"x; reboot"}'))
+        self.call(backend.ask, 'claude', 'q')
+        self.assertFalse(self.session_file('claude').exists())
+        self.assertEqual(self.log('claude')[-1]['text'], 'hi')
+
+    def failure(self, code, stderr, out='', agent='claude', config=None):
+        self.write_config(config or {'tiles': {}})
+        self.sub(done(out, stderr, code))
+        _, exit_code = self.call(backend.ask, agent, 'q')
+        self.assertEqual(exit_code, 1)
+        entry = self.log(agent)[-1]
+        self.assertEqual(entry['who'], 'agent')
+        self.assertIs(entry['error'], True)
+        self.assertTrue(entry['detail'])
+        self.assertFalse(self.session_file(agent).exists())
+        return entry['text']
+
+    def test_failures_are_explained(self):
+        remote = {'tiles': {}, 'chat': {'host': 'me@box', 'where': 'the box'}}
+        self.assertIn("Couldn't reach the box", self.failure(255, 'ssh: connect failed', config=remote))
+        self.assertIn('Claude is not installed on the box', self.failure(127, 'bash: claude: not found', config=remote))
+        self.assertIn('Claude is not installed here', self.failure(127, 'bash: claude: command not found'))
+        self.assertIn('installed incompletely', self.failure(1, 'Error: native binary not installed'))
+        self.assertIn('not signed in', self.failure(1, 'Error: please log in first'))
+        self.assertIn('rate limited', self.failure(1, 'HTTP 429 too many'))
+        self.assertIn('returned no answer', self.failure(1, 'something odd'))
+        self.assertTrue(self.failure(1, 'please log in', agent='codex').startswith('Codex'))
+
+    def test_failure_detail_is_the_last_line_and_capped(self):
+        self.failure(1, 'first\n' + 'z' * 500)
+        entry = self.log('claude')[-1]
+        self.assertEqual(len(entry['detail']), 240)
+        self.assertTrue(entry['detail'].startswith('z'))
+
+    def test_custom_agent_name_is_used(self):
+        text = self.failure(127, 'x: command not found', config={'tiles': {}, 'chat': {'agents': {'claude': {'name': 'Buddy'}}}})
+        self.assertTrue(text.startswith('Buddy '))
+
+    def test_timeout_logs_an_error(self):
+        self.write_config({'tiles': {}})
+        self.run_mock.side_effect = subprocess.TimeoutExpired('x', 300)
+        _, code = self.call(backend.ask, 'claude', 'q')
+        self.assertEqual(code, 1)
+        self.assertIs(self.log('claude')[-1]['error'], True)
+
+    def test_unknown_agent_exits(self):
+        _, code = self.call(backend.ask, 'bogus', 'q')
+        self.assertEqual(code, 1)
+        self.run_mock.assert_not_called()
+
+    def test_retry_drops_agent_entries_and_resends_last_question(self):
+        self.write_config({'tiles': {}})
+        directory = self.cache / 'chat' / 'claude'
+        directory.mkdir(parents=True)
+        (directory / 'log.json').write_text(json.dumps([
+            {'who': 'you', 'text': 'first', 'at': 1}, {'who': 'agent', 'text': 'ok', 'at': 2},
+            {'who': 'you', 'text': 'second', 'at': 3},
+            {'who': 'agent', 'text': 'boom', 'at': 4, 'error': True}, {'who': 'agent', 'text': 'boom2', 'at': 5, 'error': True}]))
+        self.sub(done(AGENT_OUT['claude']))
+        self.call(backend.ask, 'claude', '', retry=True)
+        self.assertEqual(self.run_mock.call_args.kwargs['input'], 'second')
+        log = self.log('claude')
+        self.assertEqual([(e['who'], e['text']) for e in log],
+                         [('you', 'first'), ('agent', 'ok'), ('you', 'second'), ('agent', 'hi')])
+
+    def test_retry_with_nothing_to_resend_exits(self):
+        self.write_config({'tiles': {}})
+        _, code = self.call(backend.ask, 'claude', '', retry=True)
+        self.assertEqual(code, 1)
+        self.run_mock.assert_not_called()
+
+    def test_log_is_capped(self):
+        for i in range(backend.LOG_KEEP + 10):
+            backend.log_turn('claude', 'you', str(i))
+        log = self.log('claude')
+        self.assertEqual(len(log), backend.LOG_KEEP)
+        self.assertEqual(log[-1]['text'], str(backend.LOG_KEEP + 9))
+
+class OpenAppTests(Base):
+    def launched(self):
+        return self.run_mock.call_args.args[0]
+
+    def test_local_uses_bash_lc_in_a_terminal(self):
+        self.write_config({'tiles': {}})
+        self.sub(done())
+        (self.cache / 'chat' / 'codex').mkdir(parents=True)
+        (self.cache / 'chat' / 'codex' / 'session').write_text('ab-12')
+        backend.open_app('codex')
+        c = self.launched()
+        self.assertEqual(c[:5], ['setsid', '-f', 'omarchy-launch-tui', '--app-id=org.omarchy.omatiles-codex', 'bash'])
+        self.assertEqual(c[5], '-lc')
+        self.assertTrue(c[6].endswith('exec codex resume ab-12'))
+
+    def test_remote_uses_ssh_t(self):
+        self.write_config({'tiles': {}, 'chat': {'host': 'me@box'}})
+        self.sub(done())
+        backend.open_app('claude')
+        c = self.launched()
+        self.assertEqual(c[:7], ['setsid', '-f', 'omarchy-launch-tui', '--app-id=org.omarchy.omatiles-claude', 'ssh', '-t', 'me@box'])
+        self.assertTrue(c[7].endswith('exec claude'))
+        self.assertEqual(len(c), 8)
+
+    def test_unsafe_session_is_dropped_and_non_grok_continue_marker_too(self):
+        self.write_config({'tiles': {}})
+        self.sub(done())
+        d = self.cache / 'chat' / 'codex'
+        d.mkdir(parents=True)
+        (d / 'session').write_text('x; reboot')
+        backend.open_app('codex')
+        self.assertTrue(self.launched()[6].endswith('exec codex'))
+        (d / 'session').write_text('continue')
+        backend.open_app('codex')
+        self.assertTrue(self.launched()[6].endswith('exec codex'))
+        (self.cache / 'chat' / 'grok').mkdir(parents=True)
+        (self.cache / 'chat' / 'grok' / 'session').write_text('continue')
+        backend.open_app('grok')
+        self.assertTrue(self.launched()[6].endswith('exec grok -c'))
+
+    def test_open_override(self):
+        self.write_config({'tiles': {}, 'chat': {'agents': {'claude': {'open': 'my-claude --fast'},
+                                                              'codex': {'open': 'a\nb'}, 'grok': {'open': '  '}}}})
+        self.sub(done())
+        backend.open_app('claude')
+        self.assertTrue(self.launched()[6].endswith('exec my-claude --fast'))
+        backend.open_app('codex')
+        self.assertTrue(self.launched()[6].endswith('exec codex'))
+        backend.open_app('grok')
+        self.assertTrue(self.launched()[6].endswith('exec grok'))
+
+    def test_launch_failure_exits_1(self):
+        self.write_config({'tiles': {}})
+        self.run_mock.side_effect = OSError('no setsid')
+        _, code = self.call(backend.open_app, 'claude')
+        self.assertEqual(code, 1)
+
+class MiscTests(Base):
+    def test_new_chat_removes_session_and_log(self):
+        d = self.cache / 'chat' / 'claude'
+        d.mkdir(parents=True)
+        (d / 'session').write_text('s'); (d / 'log.json').write_text('[]')
+        other = self.cache / 'chat' / 'codex'
+        other.mkdir(parents=True)
+        (other / 'session').write_text('s')
+        backend.new_chat('claude')
+        self.assertFalse((d / 'session').exists())
+        self.assertFalse((d / 'log.json').exists())
+        self.assertTrue((other / 'session').exists())
+        backend.new_chat('claude')  # nothing left: no error
+        backend.new_chat('../../etc')
+
+    def test_agents_here_writes_a_bool_per_agent(self):
+        with patch.object(backend.shutil, 'which', side_effect=lambda n: '/usr/bin/' + n if n in ('claude', 'grok') else None):
+            backend.agents_here()
+        found = json.loads((self.cache / 'agents.json').read_text())
+        self.assertEqual(found, {'claude': True, 'codex': False, 'grok': True, 'hermes': False})
+        for v in found.values():
+            self.assertIsInstance(v, bool)
+
+    def test_agents_here_sees_local_bin(self):
+        home = backend.Path.home()
+        (home / '.local/bin').mkdir(parents=True)
+        (home / '.local/bin/codex').write_text('')
+        with patch.object(backend.shutil, 'which', return_value=None):
+            backend.agents_here()
+        self.assertEqual(json.loads((self.cache / 'agents.json').read_text())['codex'], True)
+
+    def test_init_creates_config_once_and_never_overwrites(self):
+        with patch.object(backend.shutil, 'which', return_value=None):
+            backend.init('{"first": 1}')
+            self.assertEqual(self.read_config(), {'first': 1})
+            backend.init('{"second": 2}')
+            self.assertEqual(self.read_config(), {'first': 1})
+        self.assertTrue((self.cache / 'agents.json').exists())
+
+    def test_init_prunes_old_trash(self):
+        old = self.trash / 'a__old'
+        old.mkdir(parents=True)
+        age = time.time() - 3 * 86400
+        os.utime(old, (age, age))
+        with patch.object(backend.shutil, 'which', return_value=None):
+            backend.init('{}')
+        self.assertFalse(old.exists())
+
+    def test_load_config_tolerates_garbage(self):
+        (self.config / backend.CONFIG_FILE).write_text('[1,2]')
+        self.assertEqual(backend.load_config(), {'tiles': {}, 'grid': 16})
+        (self.config / backend.CONFIG_FILE).write_text('{"tiles": 5}')
+        self.assertEqual(backend.load_config()['tiles'], {})
+        (self.config / backend.CONFIG_FILE).unlink()
+        self.assertEqual(backend.load_config()['tiles'], {})
+
+    def test_owl_sizes(self):
+        self.assertEqual(backend.owl_sizes('size: 6x4\nminSize: 3 x 2'), ((6, 4), (3, 2)))
+        self.assertEqual(backend.owl_sizes('  size: 5x3'), ((5, 3), (3, 2)))
+        self.assertEqual(backend.owl_sizes('nothing'), ((4, 4), (2, 2)))
+
+class GuardTests(unittest.TestCase):
+    WORDS = []  # personal words removed; see tests/private-words.txt
+
+    def test_no_personal_data_in_the_plugin(self):
+        hits = []
+        for path in sorted(ROOT.rglob('*')):
+            parts = path.relative_to(ROOT).parts
+            if not path.is_file() or parts[0] in ('tests', 'owl', '.git') or '__pycache__' in parts:
+                continue
+            for n, line in enumerate(path.read_bytes().decode('utf-8', 'ignore').splitlines(), 1):
+                for word in self.WORDS:
+                    if word.lower() in line.lower():
+                        hits.append('%s:%d: [%s] %s' % ('/'.join(parts), n, word, line.strip()[:100]))
+        self.assertEqual(hits, [], '\n' + '\n'.join(hits))
+
+if __name__ == '__main__':
+    unittest.main()

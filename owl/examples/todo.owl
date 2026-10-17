@@ -1,0 +1,37 @@
+widget "todo" {
+  meta { description: "Open items from the Markdown checklist ~/notes/todo.md; tap one to check it off"; version: "1.2"; license: "MIT"; category: "productivity" }
+  size: 3x4
+  minSize: 3x2
+
+  // "- [ ] item" lines are open, "- [x] item" lines are done. Prints "line-number:item".
+  source todo = cmd("""
+    f=~/notes/todo.md
+    mkdir -p "${f%/*}"
+    [ -f "$f" ] || printf '# todo\n\n- [ ] tap an item to check it off\n- [ ] tap the title to edit this list\n' > "$f"
+    grep -n '^\s*[-*] \[ \] ' "$f" | sed 's/^\([0-9]*\):\s*[-*] \[ \] /\1:/'
+  """) every 1m
+  let items = lines(todo).filter(l => contains(l, ":")).map(l => { line: num(split(l, ":")[0]), text: sub(l, len(split(l, ":")[0]) + 1) })
+
+  Column {
+    gap: 6
+    Row {
+      onTap: terminal('$EDITOR ~/notes/todo.md', "todo")
+      Text { text: "todo"; style: muted; weight: 1 }
+      Text { text: "${len(items)}"; fontSize: 12; color: accent; width: 32; align: end }
+    }
+    if items != null && len(items) == 0 { Text { text: "all done"; style: small; color: green } }
+    Column {
+      scroll: true
+      weight: 1
+      gap: 6
+      for it in items key it.line {
+        Row {
+          gap: 8
+          onTap: run("sed -i '${int(it.line)}s/\\[ \\]/[x]/' ~/notes/todo.md")
+          Box { size: 14; radius: 3; border: 1; borderColor: muted }
+          Text { text: it.text; fontSize: 12; maxLines: 2; weight: 1 }
+        }
+      }
+    }
+  }
+}
