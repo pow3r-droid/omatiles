@@ -55,6 +55,8 @@ rm -rf ~/.config/omarchy/omatiles.json ~/.config/omarchy/omatiles ~/.cache/omati
   ten seconds.
 - **widget store:** browse, search and add widgets. The *built in* section brings back
   hidden tiles. Each store widget shows what it installs and runs before you add it.
+  Widgets made for the phone are labelled *phone only*, and widgets whose packages
+  aren't installed say which ones they need.
 - **new widget with claude:** describe a widget. Claude Code writes it, the store's
   checker reviews it, and it lands on a free spot.
 - **dock icons: theme color / full color**
