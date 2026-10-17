@@ -727,7 +727,7 @@ Scope {
                         }
                         Text {
                             width: parent.width; elide: Text.ElideRight
-                            text: wxTile.w ? "feels " + root.deg(wxTile.w, "feels") + " · " + wxTile.w.location.toLowerCase()
+                            text: wxTile.w ? "feels " + root.deg(wxTile.w, "feels") + " · " + wxTile.w.location
                                 : weatherFetch.running ? "loading weather…" : "No weather yet. It comes from wttr.in for Omarchy's weather location."
                             color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
                         }
