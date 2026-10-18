@@ -1,6 +1,24 @@
 # Publishing OmaTiles
 
 1. Run the checks: `tests/check.sh` must end with every suite passing and `omarchy plugin validate` clean.
+   Then walk the security checklist below against the diff since the last release.
+
+## Security checklist
+
+The tests only catch what someone thought of. Before each release, follow the user's data across every
+boundary the diff touches and answer these. Each finding gets a fix and a test that fails without it.
+
+- **What you see is what runs.** Wherever the user approves something (a store widget, a widget Claude wrote,
+  anything new), the approval names exactly what runs: the action carries the SHA-256 of what was shown and
+  the backend refuses anything else. The screen refreshes when the data behind it changes.
+- **Nothing private on a command line.** Other local users can read a running process's arguments. Chat
+  turns, widget requests and anything the user typed go over stdin, at every hop (desk, backend, CLI).
+- **Agents write only where they must.** Each agent call gets the fewest tools, a read-only sandbox where it
+  has one, and no write access (`--add-dir`, cwd) to the plugin's folder or the user's config.
+- **Shell lines are built from checked parts only.** Every value put into a shell line or a hyprctl dispatch
+  is validated by a pattern or passed through `shlex.quote`, and has a test with a hostile value.
+- **Files stay ours.** Paths derived from ids are matched by a pattern and resolved inside our folders.
+  Nothing is written into the plugin's folder at run time (it makes Omarchy reload the plugin).
 2. Create the public repository and push:
 
    ```sh
