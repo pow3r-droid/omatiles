@@ -203,8 +203,9 @@ def move(key, page):
         save_config(config)
     print(json.dumps({'ok': True, 'page': page}))
 
-def add_builtin(key, page=1):
-    """Put a hidden built-in, or a widget already on disk, back on the desk."""
+def add_builtin(key, page=1, shown=''):
+    """Put a hidden built-in, or a widget already on disk, on the desk. A widget goes on only
+    when `shown` is the SHA-256 of its file as the store showed it (see `review`)."""
     if key in BUILTIN:
         d = DEFAULT_PLACES[key]
         print(json.dumps(put_on_desk(key, (d[2], d[3]), page, least=BUILTIN_MIN.get(key, (max(2, d[2] // 2), max(2, d[3] // 2))))))
@@ -214,7 +215,14 @@ def add_builtin(key, page=1):
     if sizes is None:
         print(json.dumps({'ok': False, 'error': 'unknown widget'}))
         sys.exit(1)
-    print(json.dumps(put_on_desk(key, sizes[0], page, least=sizes[1])))
+    if not SHA256.match(shown or '') or hashlib.sha256((folder / 'widget.owl').read_bytes()).hexdigest() != shown:
+        print(json.dumps({'ok': False, 'error': 'this widget changed since you looked at it. Look at what it runs now, then add it again'}))
+        sys.exit(1)
+    try:
+        packages = (json.loads((folder / 'review.json').read_text()).get('requires') or {}).get('pacman') or []
+    except (OSError, ValueError, AttributeError):
+        packages = []
+    print(json.dumps(put_on_desk(key, sizes[0], page, missing_packages(packages), sizes[1])))
 
 def remove(key):
     """Take a tile off the desk. Built-ins are hidden; widgets go to the trash so the
@@ -392,7 +400,8 @@ def check_owl(path):
     return result.returncode == 0, (result.stdout + result.stderr).strip()
 
 def create(request, page=1):
-    """Have Claude write a widget from a description, check it, and put it on the desk."""
+    """Have Claude write a widget from a description and check it. It goes on a desk only from
+    the store, after the user has seen what it runs."""
     if not shutil.which('claude'):
         print(json.dumps({'ok': False, 'error': 'Claude Code is not installed on this machine'}))
         sys.exit(1)
@@ -404,12 +413,13 @@ def create(request, page=1):
     while folder.exists():
         folder, n = WIDGETS / 'local' / f'{slug}-{n}', n + 1
     folder.mkdir(parents=True)
-    prompt = CREATE_PROMPT.format(lang=OWL / 'LANGUAGE.md', ex1=OWL / 'examples' / 'feeds.owl',
-                                  ex2=OWL / 'examples' / 'todo.owl', request=request)
+    ref = owl_reference()
+    prompt = CREATE_PROMPT.format(lang=ref / 'LANGUAGE.md', ex1=ref / 'examples' / 'feeds.owl',
+                                  ex2=ref / 'examples' / 'todo.owl', request=request)
     # Sonnet without the user's settings or MCP servers: just the files it needs.
     base = ['claude', '-p', '--model', 'sonnet', '--output-format', 'json', '--setting-sources', 'project',
             '--strict-mcp-config', '--tools', 'Read,Write,Edit', '--permission-mode', 'acceptEdits',
-            '--add-dir', str(OWL)]
+            '--add-dir', str(ref)]
     session, ok, report = None, False, 'Claude did not write widget.owl'
     for attempt in range(2):
         command = base + (['--resume', session] if session else [])
@@ -430,13 +440,49 @@ def create(request, page=1):
     named = re.search(r'^widget\s+"([a-z0-9-]+)"', source, re.M)
     if named and named.group(1) != folder.name and not (folder.parent / named.group(1)).exists():
         folder = folder.rename(folder.parent / named.group(1))
-    size, least = owl_sizes(source)
-    programs = subprocess.run(['java', '-jar', str(OWL / 'owl.jar'), 'programs', str(folder / 'widget.owl')],
-                              capture_output=True, text=True, timeout=60).stdout.strip()
-    packages = [line.split(' ', 1)[1] for line in programs.splitlines() if line.startswith('pacman ')]
-    key = 'owl:local/' + folder.name
-    placed = put_on_desk(key, size, page, missing_packages(packages), least)
-    print(json.dumps(dict(placed, key=key, programs=programs.splitlines())))
+    # Not on a desk yet: the store shows what it runs first, and the user adds it from there.
+    entry = review(folder)
+    if not entry:
+        print(json.dumps({'ok': False, 'error': "the checker couldn't list what the widget runs", 'folder': str(folder)}))
+        sys.exit(1)
+    print(json.dumps({'ok': True, 'key': 'owl:local/' + folder.name, 'entry': entry}))
+
+def owl_reference():
+    """A fresh copy of the OWL docs and examples for Claude to read. Claude may write only
+    there and in the widget's folder, never in the plugin's folder, which holds the desk's code."""
+    ref = CACHE / 'owl-ref'
+    shutil.rmtree(ref, ignore_errors=True)
+    (ref / 'examples').mkdir(parents=True)
+    for name in ('LANGUAGE.md', 'examples/feeds.owl', 'examples/todo.owl'):
+        shutil.copyfile(OWL / name, ref / name)
+    return ref
+
+def review(folder):
+    """A widget made here, listed the way the store lists its widgets (with every command it
+    runs and the SHA-256 of its file), saved beside it as review.json. None if it can't be."""
+    if not folder or not (folder / 'widget.owl').is_file():
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        mirror = Path(tmp) / 'widgets' / 'local' / folder.name
+        mirror.mkdir(parents=True)
+        shutil.copyfile(folder / 'widget.owl', mirror / 'widget.owl')
+        try:
+            subprocess.run(['java', '-jar', str(OWL / 'owl.jar'), 'index', tmp], capture_output=True, timeout=60)
+            entry = json.loads((Path(tmp) / 'index.json').read_text())['widgets'][0]
+        except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, IndexError, TypeError):
+            return None
+    if not isinstance(entry, dict) or entry.get('sha256') != hashlib.sha256((folder / 'widget.owl').read_bytes()).hexdigest():
+        return None
+    entry = dict(entry, id='local/' + folder.name, local=True)
+    atomic(folder / 'review.json', json.dumps(entry))
+    return entry
+
+def review_local(key):
+    """Print what a widget made here runs, for the store to show before it goes on a desk."""
+    entry = review(owl_folder(key) if key.startswith('owl:local/') else None)
+    print(json.dumps(entry or {'ok': False, 'error': "the checker couldn't list what this widget runs"}))
+    if not entry:
+        sys.exit(1)
 
 def themes():
     """Omarchy themes with their background and five swatch colors, for the theme picker
@@ -936,7 +982,8 @@ if __name__ == '__main__':
         'place': lambda: place(args[0], args[1]),
         'store': lambda: store(args == ['force']),
         'install': lambda: install(args[0], page_arg(3), args[2] if len(args) > 2 else ''),
-        'add': lambda: add_builtin(args[0], page_arg(3)),
+        'add': lambda: add_builtin(args[0], page_arg(3), args[2] if len(args) > 2 else ''),
+        'review': lambda: review_local(args[0]),
         'create': lambda: create(stdin_text(), page_arg(2)),
         'move': lambda: move(args[0], page_arg(3)),
         'remove': lambda: remove(args[0]),

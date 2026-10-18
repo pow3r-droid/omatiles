@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import shutil
 import os
 from pathlib import Path
 import subprocess
@@ -79,6 +80,100 @@ class Base(unittest.TestCase):
                 code = e.code
         text = out.getvalue().strip()
         return (json.loads(text) if text else None), code
+
+class CreateTests(Base):
+    """A widget Claude writes goes on a desk only after the store has shown what it runs."""
+    SOURCE = b'widget "made" {\n size: 4x2\n}\n'
+
+    def fake_tools(self, source=None):
+        source = self.SOURCE if source is None else source
+        def fake(args, **kw):
+            if args[0] == 'pacman':
+                return done(code=1)
+            if args[0] == 'claude':
+                (Path(kw['cwd']) / 'widget.owl').write_bytes(source)
+                return done('{"session_id":"s1"}')
+            if args[:3] == ['java', '-jar', str(backend.OWL / 'owl.jar')] and args[3] == 'check':
+                return done()
+            if args[3] == 'index':
+                repo = Path(args[4])
+                owl = next(repo.rglob('widget.owl'))
+                entry = {'id': 'local/' + owl.parent.name, 'name': owl.parent.name, 'author': 'local',
+                         'sha256': hashlib.sha256(owl.read_bytes()).hexdigest(), 'size': [4, 2],
+                         'requires': {'pacman': ['missingpkg']}, 'commands': ['echo hi']}
+                (repo / 'index.json').write_text(json.dumps({'widgets': [entry]}))
+                return done()
+            raise AssertionError(args)
+        self.run_mock.side_effect = fake
+
+    def create(self, source=None):
+        self.write_config({'tiles': {}})
+        self.fake_tools(source)
+        with patch.object(backend.shutil, 'which', return_value='/usr/bin/x'):
+            return self.call(backend.create, 'a made widget', 1)
+
+    def test_create_shows_what_it_runs_and_places_nothing(self):
+        out, code = self.create()
+        self.assertIsNone(code)
+        self.assertTrue(out['ok'])
+        self.assertEqual(out['key'], 'owl:local/made')
+        self.assertEqual(out['entry']['commands'], ['echo hi'])
+        self.assertTrue(out['entry']['local'])
+        self.assertEqual(out['entry']['sha256'], hashlib.sha256(self.SOURCE).hexdigest())
+        self.assertEqual(self.tiles(), {})
+        saved = json.loads((self.widgets / 'local' / 'made' / 'review.json').read_text())
+        self.assertEqual(saved, out['entry'])
+
+    def test_claude_may_write_only_in_a_copy_of_the_docs_never_the_plugin(self):
+        self.create()
+        claude = next(c.args[0] for c in self.run_mock.call_args_list if c.args[0][0] == 'claude')
+        given = claude[claude.index('--add-dir') + 1]
+        self.assertEqual(given, str(self.cache / 'owl-ref'))
+        self.assertNotIn(str(backend.OWL), ' '.join(claude))
+        self.assertTrue((self.cache / 'owl-ref' / 'LANGUAGE.md').is_file())
+
+    def test_a_made_widget_goes_on_only_with_the_hash_that_was_shown(self):
+        out, _ = self.create()
+        key, sha = out['key'], out['entry']['sha256']
+        for shown in ['', '0' * 64, sha.upper()]:
+            res, code = self.call(backend.add_builtin, key, 1, shown)
+            self.assertEqual(code, 1, repr(shown))
+            self.assertNotIn(key, self.tiles(), repr(shown))
+        # Changed after it was shown: refused too.
+        (self.widgets / 'local' / 'made' / 'widget.owl').write_bytes(self.SOURCE + b'# changed\n')
+        res, code = self.call(backend.add_builtin, key, 1, sha)
+        self.assertEqual(code, 1)
+        (self.widgets / 'local' / 'made' / 'widget.owl').write_bytes(self.SOURCE)
+        res, code = self.call(backend.add_builtin, key, 1, sha)
+        self.assertIsNone(code)
+        self.assertEqual(res['missing'], ['missingpkg'])
+        self.assertTrue(self.tiles()[key]['enabled'])
+
+    def test_review_lists_only_widgets_made_here(self):
+        self.create()
+        out, code = self.call(backend.review_local, 'owl:local/made')
+        self.assertIsNone(code)
+        self.assertEqual(out['commands'], ['echo hi'])
+        for key in ['owl:al/clock', 'owl:local/../x', 'owl:local/missing', 'clock']:
+            out, code = self.call(backend.review_local, key)
+            self.assertEqual(code, 1, key)
+
+    @unittest.skipUnless(shutil.which('java'), 'needs Java for the real checker')
+    def test_review_with_the_real_checker_lists_every_command(self):
+        folder = self.widgets / 'local' / 'feeds'
+        folder.mkdir(parents=True)
+        shutil.copyfile(backend.OWL / 'examples' / 'feeds.owl', folder / 'widget.owl')
+        self.run_mock.side_effect = REAL_RUN
+        entry = backend.review(folder)
+        self.assertEqual(entry['id'], 'local/feeds')
+        self.assertEqual(entry['sha256'], hashlib.sha256((folder / 'widget.owl').read_bytes()).hexdigest())
+        self.assertTrue(entry['commands'] and all(isinstance(c, str) for c in entry['commands']))
+        self.assertTrue(any('feeds' in c for c in entry['commands']))
+
+    def test_the_desk_adds_a_made_widget_only_from_its_review(self):
+        qml = (ROOT / 'Service.qml').read_text()
+        self.assertNotIn('["add", localRow.key', qml)
+        self.assertIn('root.run(reviewProc, ["review", localRow.key])', qml)
 
 class PlaceTests(Base):
     def test_place_updates_one_tile_with_integer_geometry_and_keeps_others(self):

@@ -277,7 +277,7 @@ Scope {
     // A reload can change the widget being looked at: show its new entry, never the old one.
     // The install is pinned to the SHA-256 on screen, so it can't run something else anyway.
     onStoreWidgetsChanged: {
-        if (!storePick) return;
+        if (!storePick || storePick.local) return;
         var id = storePick.id, now = null;
         for (var i = 0; i < storeWidgets.length; i++) if (storeWidgets[i] && storeWidgets[i].id === id) now = storeWidgets[i];
         if (now && now.sha256 === storePick.sha256) return;
@@ -295,8 +295,14 @@ Scope {
     Process { id: removeProc }
     InputProcess {
         id: createProc
-        stdout: StdioCollector { waitForEnd: true; onStreamFinished: { try { root.createResult = JSON.parse(text); } catch(e) { root.createResult = {ok:false, error:"Claude did not finish"}; } if (root.createResult.overlap) root.showStacked(); } }
+        stdout: StdioCollector { waitForEnd: true; onStreamFinished: { var r; try { r = JSON.parse(text); } catch(e) { r = {ok: false, error: "Claude did not finish"}; } if (r.ok && r.entry) root.showLocal(r.entry, "Claude wrote it and the checker passed. Look at what it runs, then add it to the desk."); else root.createResult = r; } }
     }
+    // A widget made here goes on a desk only from the store's detail pane, once its commands were shown.
+    Process {
+        id: reviewProc
+        stdout: StdioCollector { waitForEnd: true; onStreamFinished: { try { var r = JSON.parse(text); if (r.sha256) root.showLocal(r, ""); else root.storeMessage = "Not added: " + r.error; } catch(e) { root.storeMessage = "Not added."; } } }
+    }
+    function showLocal(entry, message) { createOpen = false; typing = false; if (!storeOpen) openStore(); storePick = entry; storeMessage = message; }
     function placedText(r) {
         return (r.overlap ? "No free spot, so it sits on top of the other tiles." : "Added to this desk.")
             + (r.shrunk ? " Sized " + r.w + "x" + r.h + " to fit." : "")
@@ -1178,8 +1184,8 @@ Scope {
                                         anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
                                         spacing: Style.spacing.huge
                                         Text {
-                                            visible: !root.config.tiles[localRow.key]; text: " add to desk"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body
-                                            MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: root.run(installProc, ["add", localRow.key, String(root.page)]) }
+                                            visible: !root.config.tiles[localRow.key]; text: " review to add"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body
+                                            MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: root.run(reviewProc, ["review", localRow.key]) }
                                         }
                                         Text {
                                             // Two clicks: the first asks, the second deletes (undo still follows).
@@ -1267,7 +1273,7 @@ Scope {
                             onClicked: {
                                 if (installProc.running) return;
                                 if (root.installed(detail.w.id)) { root.removeTile("owl:" + detail.w.id); root.storeMessage = "Removed. Undo is at the bottom of the desk for a few seconds."; return; }
-                                root.run(installProc, ["install", detail.w.id, String(root.page), String(detail.w.sha256 || "")]);
+                                root.run(installProc, [detail.w.local ? "add" : "install", (detail.w.local ? "owl:" : "") + detail.w.id, String(root.page), String(detail.w.sha256 || "")]);
                             }
                         }
                         Label { visible: root.storeMessage !== ""; text: root.storeMessage; color: root.ink; font.pixelSize: Style.font.body }
@@ -1453,12 +1459,8 @@ Scope {
                         onClicked: { root.createResult = null; root.runWith(createProc, ["create", String(root.page)], createInput.text.trim()); }
                     }
                     Label {
-                        visible: !!root.createResult; font.pixelSize: Style.font.body
-                        color: root.createResult && root.createResult.ok ? Color.foreground : root.danger
-                        text: !root.createResult ? "" : root.createResult.ok
-                            ? root.createResult.key.slice(10) + ": " + root.placedText(root.createResult)
-                              + "\nIt runs: " + root.createResult.programs.filter(function(l){ return l.indexOf("program ")===0; }).map(function(l){ return l.slice(8); }).join(", ")
-                            : "Not added: " + root.createResult.error
+                        visible: !!root.createResult && !root.createResult.ok; font.pixelSize: Style.font.body; color: root.danger
+                        text: root.createResult ? "Not written: " + root.createResult.error : ""
                     }
                 }
             }

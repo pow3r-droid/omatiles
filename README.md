@@ -69,8 +69,9 @@ rm -rf ~/.config/omarchy/omatiles.json ~/.config/omarchy/omatiles ~/.cache/omati
   hidden tiles. Each store widget shows what it installs and runs before you add it.
   Widgets made for the phone are labelled *phone only*, and widgets whose packages
   aren't installed say which ones they need.
-- **new widget with claude:** describe a widget. Claude Code writes it, the store's
-  checker reviews it, and it lands on a free spot.
+- **new widget with claude:** describe a widget. Claude Code writes it and the store's
+  checker reviews it. The store then shows every command it runs, the same way it shows a
+  store widget, and the widget goes on the desk only when you press **add to desk**.
 - **tile desktops: 1 / 1–2 / 1–3**
 - **dock icons: symbols / full color**
 - **theme:** switch Omarchy themes from the desk.
@@ -219,7 +220,11 @@ Everything runs as you. Nothing needs root. The desk runs:
   installed for you.
 - **New widgets:** Claude Code (Sonnet) writes one OWL file in the widget's own folder,
   and the vendored `owl.jar` checker reviews it. Claude Code runs with only its Read,
-  Write and Edit tools, without your Claude settings or MCP servers.
+  Write and Edit tools, without your Claude settings or MCP servers. It reads the OWL
+  docs from a fresh copy in the cache, so it can't write to the plugin's own folder.
+  Nothing it writes runs until you've seen its commands in the store and added it: that
+  add is pinned to the SHA-256 of the file you were shown, like a store install. Older
+  widgets made with Claude show **review to add** for the same reason.
 
 Removed widgets stay in `~/.config/omarchy/omatiles/widgets/.trash` for a day.
 

@@ -2,6 +2,10 @@
 
 ## 2.1.0 (2026-10-17)
 
+- **Widgets Claude writes wait for you:** a widget made with Claude no longer goes straight onto the desk and
+  starts its commands. The store shows every command it runs first, and **add to desk** is pinned to the SHA-256
+  of the file you saw. Claude reads the OWL docs from a fresh copy in the cache, so it can no longer write to
+  the plugin's own folder.
 - **Chat prompts stay off the command line:** the desk now hands a chat turn, and a widget request for Claude, to
   the backend over stdin. Before, it was an argument of the waiting backend process, which other local users
   can read. Reported in the marketplace review.
