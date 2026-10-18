@@ -432,6 +432,10 @@ def create(request, page=1):
         if (folder / 'widget.owl').exists():
             ok, report = check_owl(folder / 'widget.owl')
             if ok:
+                # The store's listing also holds it to the marketplace rules (a description, ...).
+                entry, why = review(folder)
+                ok, report = bool(entry), why
+            if ok:
                 break
     if not ok:
         print(json.dumps({'ok': False, 'error': report[-600:], 'folder': str(folder)}))
@@ -441,9 +445,9 @@ def create(request, page=1):
     if named and named.group(1) != folder.name and not (folder.parent / named.group(1)).exists():
         folder = folder.rename(folder.parent / named.group(1))
     # Not on a desk yet: the store shows what it runs first, and the user adds it from there.
-    entry = review(folder)
+    entry, why = review(folder)
     if not entry:
-        print(json.dumps({'ok': False, 'error': "the checker couldn't list what the widget runs", 'folder': str(folder)}))
+        print(json.dumps({'ok': False, 'error': why, 'folder': str(folder)}))
         sys.exit(1)
     print(json.dumps({'ok': True, 'key': 'owl:local/' + folder.name, 'entry': entry}))
 
@@ -459,28 +463,33 @@ def owl_reference():
 
 def review(folder):
     """A widget made here, listed the way the store lists its widgets (with every command it
-    runs and the SHA-256 of its file), saved beside it as review.json. None if it can't be."""
+    runs and the SHA-256 of its file), saved beside it as review.json. Returns (entry, None),
+    or (None, why) when the checker won't list it: it holds widgets to the marketplace rules."""
     if not folder or not (folder / 'widget.owl').is_file():
-        return None
+        return None, 'there is no widget.owl to look at'
     with tempfile.TemporaryDirectory() as tmp:
         mirror = Path(tmp) / 'widgets' / 'local' / folder.name
         mirror.mkdir(parents=True)
         shutil.copyfile(folder / 'widget.owl', mirror / 'widget.owl')
         try:
-            subprocess.run(['java', '-jar', str(OWL / 'owl.jar'), 'index', tmp], capture_output=True, timeout=60)
-            entry = json.loads((Path(tmp) / 'index.json').read_text())['widgets'][0]
-        except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, IndexError, TypeError):
-            return None
-    if not isinstance(entry, dict) or entry.get('sha256') != hashlib.sha256((folder / 'widget.owl').read_bytes()).hexdigest():
-        return None
+            result = subprocess.run(['java', '-jar', str(OWL / 'owl.jar'), 'index', tmp], capture_output=True, text=True, timeout=60)
+            widgets = json.loads((Path(tmp) / 'index.json').read_text())['widgets']
+        except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):
+            return None, "the checker couldn't list what the widget runs"
+    skipped = [l.split(': ', 1)[-1] for l in ((result.stdout or '') + '\n' + (result.stderr or '')).splitlines() if l.startswith('skipped ')]
+    entry = widgets[0] if isinstance(widgets, list) and widgets else None
+    if not isinstance(entry, dict):
+        return None, 'the checker skipped it: ' + (skipped[0] if skipped else 'no reason given')
+    if entry.get('sha256') != hashlib.sha256((folder / 'widget.owl').read_bytes()).hexdigest():
+        return None, "the checker couldn't list what the widget runs"
     entry = dict(entry, id='local/' + folder.name, local=True)
     atomic(folder / 'review.json', json.dumps(entry))
-    return entry
+    return entry, None
 
 def review_local(key):
     """Print what a widget made here runs, for the store to show before it goes on a desk."""
-    entry = review(owl_folder(key) if key.startswith('owl:local/') else None)
-    print(json.dumps(entry or {'ok': False, 'error': "the checker couldn't list what this widget runs"}))
+    entry, why = review(owl_folder(key) if key.startswith('owl:local/') else None)
+    print(json.dumps(entry or {'ok': False, 'error': why}))
     if not entry:
         sys.exit(1)
 
@@ -775,7 +784,7 @@ def log_turn(agent, who, text, error=False, detail=''):
         entry['detail'] = detail[:240]
     log_write(agent, log_read(agent) + [entry])
 
-TEXT_MAX = 20000
+TEXT_MAX = 131072  # what one command-line argument could hold before (MAX_ARG_STRLEN)
 
 def stdin_text():
     """A chat turn or a widget request comes on stdin, as one JSON string line, never on the

@@ -164,11 +164,43 @@ class CreateTests(Base):
         folder.mkdir(parents=True)
         shutil.copyfile(backend.OWL / 'examples' / 'feeds.owl', folder / 'widget.owl')
         self.run_mock.side_effect = REAL_RUN
-        entry = backend.review(folder)
+        entry, why = backend.review(folder)
+        self.assertIsNone(why)
         self.assertEqual(entry['id'], 'local/feeds')
         self.assertEqual(entry['sha256'], hashlib.sha256((folder / 'widget.owl').read_bytes()).hexdigest())
         self.assertTrue(entry['commands'] and all(isinstance(c, str) for c in entry['commands']))
         self.assertTrue(any('feeds' in c for c in entry['commands']))
+
+    @unittest.skipUnless(shutil.which('java'), 'needs Java for the real checker')
+    def test_review_says_which_marketplace_rule_a_widget_misses(self):
+        folder = self.widgets / 'local' / 'bare'
+        folder.mkdir(parents=True)
+        (folder / 'widget.owl').write_text('widget "bare" {\n  meta { owl: 6 }\n  size: 4x2\n  Text { text: sh("date") }\n}\n')
+        self.run_mock.side_effect = REAL_RUN
+        entry, why = backend.review(folder)
+        self.assertIsNone(entry)
+        self.assertIn('description', why)
+        self.assertFalse((folder / 'review.json').exists())
+
+    def test_create_sends_the_listing_rule_back_to_claude(self):
+        # The first file passes the checker but not the store's listing; Claude gets the reason.
+        listed = []
+        self.write_config({'tiles': {}})
+        self.fake_tools()
+        fake = self.run_mock.side_effect
+        def first_skipped(args, **kw):
+            if args[0] == 'java' and args[3] == 'index' and not listed:
+                listed.append(1)
+                (Path(args[4]) / 'index.json').write_text('{"widgets": []}')
+                return done('skipped widgets/local/made/widget.owl: meta needs a description\n')
+            return fake(args, **kw)
+        self.run_mock.side_effect = first_skipped
+        with patch.object(backend.shutil, 'which', return_value='/usr/bin/x'):
+            out, code = self.call(backend.create, 'a made widget', 1)
+        self.assertTrue(out['ok'], out)
+        claude = [c for c in self.run_mock.call_args_list if c.args[0][0] == 'claude']
+        self.assertEqual(len(claude), 2)
+        self.assertIn('meta needs a description', claude[1].kwargs['input'])
 
     def test_the_desk_adds_a_made_widget_only_from_its_review(self):
         qml = (ROOT / 'Service.qml').read_text()
@@ -695,7 +727,7 @@ class ChatTests(Base):
 
     def test_stdin_text_is_one_json_string_line_capped(self):
         for raw, want in (('"hi\\nthere"\n', 'hi\nthere'), ('not json\n', ''), ('42\n', ''), ('', ''),
-                          (json.dumps('x' * 30000) + '\n', 'x' * backend.TEXT_MAX)):
+                          (json.dumps('x' * (backend.TEXT_MAX + 10)) + '\n', 'x' * backend.TEXT_MAX)):
             with patch.object(backend.sys, 'stdin', io.StringIO(raw)):
                 self.assertEqual(backend.stdin_text(), want, repr(raw[:20]))
 
