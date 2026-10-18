@@ -6,6 +6,7 @@ import json
 import shutil
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -1180,21 +1181,77 @@ class MiscTests(Base):
         self.assertEqual(backend.owl_sizes('  size: 5x3'), ((5, 3), (3, 2)))
         self.assertEqual(backend.owl_sizes('nothing'), ((4, 4), (2, 2)))
 
+PRIVATE_WORDS = ROOT / 'tests' / 'private-words.txt'
+
 class GuardTests(unittest.TestCase):
-    WORDS = []  # personal words removed; see tests/private-words.txt
+    """Nothing that ships names a real person, machine, account or network.
+
+    The patterns catch the shapes private data takes, in every text file, this one included.
+    Words only you would know (your name, user, hosts, city, projects) go one per line in
+    tests/private-words.txt, which git ignores, or comma-separated in OMATILES_PRIVATE_WORDS:
+    the guard checks every file for them without the repository ever naming them."""
+    # (what, pattern, placeholder the repo may use)
+    PATTERNS = [
+        # Tailscale's 100.64.0.0/10; 100.64.0.x and 100.64.1.x are the placeholders.
+        ('tailnet address', r'\b100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}\b', r'100\.64\.[01]\.\d{1,3}'),
+        ('private address', r'\b(?:10\.\d{1,3}|192\.168|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}\b', None),
+        ('home path', r'/home/[A-Za-z0-9._-]+', r'/home/(?:user|you)'),
+        # Systemd units (a@b.service) and ssh hosts (me@box.local) look like addresses too.
+        ('email', r'[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}',
+         r'.*@(?:[\w-]+\.)*(?:example\.(?:com|org|net)|[\w-]+\.(?:service|socket|timer|target|local|lan|internal))'),
+        ('chat id', r'(?i)\b(?:chat|telegram|tg|peer|user)[ _-]?id\b\W{0,6}-?\d{6,}', None),
+        ('bot token', r'\b\d{8,10}:[A-Za-z0-9_-]{35}\b', None),
+        ('api token', r'\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_\w{22,}|sk-(?:ant-)?[A-Za-z0-9_-]{20,}'
+                      r'|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|GOCSPX-[A-Za-z0-9_-]{20,})', None),
+        # [ ] keeps the phrase itself out of this file (tests/check.sh looks for it).
+        ('private key', r'-----BEGIN [A-Z ]*PRIVATE[ ]KEY-----', None),
+    ]
+
+    @staticmethod
+    def private_words():
+        words = [w for w in os.environ.get('OMATILES_PRIVATE_WORDS', '').split(',')]
+        try:
+            words += PRIVATE_WORDS.read_text().splitlines()
+        except OSError:
+            pass
+        return sorted({w.strip().lower() for w in words if w.strip() and not w.strip().startswith('#')})
+
+    def leaks(self, text):
+        out = []
+        for what, pattern, placeholder in self.PATTERNS:
+            for m in re.finditer(pattern, text):
+                if not (placeholder and re.fullmatch(placeholder, m.group(0))):
+                    out.append((what, m.group(0)))
+        return out
 
     def test_no_personal_data_in_the_plugin(self):
-        hits = []
+        words, hits = self.private_words(), []
         for path in sorted(ROOT.rglob('*')):
             parts = path.relative_to(ROOT).parts
-            # Everything that ships, vendored files included; only this test names the words.
-            if not path.is_file() or path == Path(__file__).resolve() or '.git' in parts or '.impeccable' in parts or '__pycache__' in parts:
+            # Everything that ships, vendored files included.
+            if not path.is_file() or path == PRIVATE_WORDS or '.git' in parts or '.impeccable' in parts or '__pycache__' in parts:
                 continue
-            for n, line in enumerate(path.read_bytes().decode('utf-8', 'ignore').splitlines(), 1):
-                for word in self.WORDS:
-                    if word.lower() in line.lower():
-                        hits.append('%s:%d: [%s] %s' % ('/'.join(parts), n, word, line.strip()[:100]))
+            raw = path.read_bytes()
+            for n, line in enumerate(raw.decode('utf-8', 'ignore').splitlines(), 1):
+                low = line.lower()
+                hits += ['%s:%d: [a private word] %s' % ('/'.join(parts), n, line.strip()[:100]) for w in words if w in low]
+                # Patterns read text only: compressed bytes in a jar look like addresses by chance.
+                if b'\0' not in raw:
+                    hits += ['%s:%d: [%s] %s' % ('/'.join(parts), n, what, found) for what, found in self.leaks(line)]
         self.assertEqual(hits, [], '\n' + '\n'.join(hits))
+
+    def test_the_patterns_catch_what_they_are_for(self):
+        # Built from pieces, so this file holds none of them whole.
+        caught = {
+            'tailnet address': '100.' + '101.20.30', 'private address': '192.' + '168.4.20',
+            'home path': '/home' + '/someone/.config', 'email': 'someone' + '@' + 'mail.test',
+            'chat id': 'chat_' + 'id: 12345678', 'bot token': '12345678' + ':' + 'A' * 35,
+            'api token': 'gh' + 'p_' + 'a' * 36, 'private key': '-----BEGIN OPENSSH PRIVATE' + ' KEY-----',
+        }
+        for what, text in caught.items():
+            self.assertIn(what, [w for w, _ in self.leaks(text)], what)
+        for placeholder in ['100.64.1.2', '/home/user/x', 'a@b.service', 'me@box.local', 'you@example.com']:
+            self.assertEqual(self.leaks(placeholder), [], placeholder)
 
 if __name__ == '__main__':
     unittest.main()

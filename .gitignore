@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 .impeccable/
+# Your own words for the leak guard (see GuardTests); never committed.
+tests/private-words.txt
