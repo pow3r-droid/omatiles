@@ -552,6 +552,15 @@ class DockTests(Base):
         self.assertIsInstance(config['tiles'], dict)
         self.assertNotIn('evil', config)
 
+    def test_set_option_choices_take_only_their_values(self):
+        self.write_config({'tiles': {}})
+        backend.set_option('clock', '12')
+        backend.set_option('units', 'metric')
+        self.assertEqual((self.read_config()['clock'], self.read_config()['units']), ('12', 'metric'))
+        for name, bad in [('clock', '13'), ('clock', 'true'), ('units', 'kelvin'), ('units', '')]:
+            backend.set_option(name, bad)
+        self.assertEqual((self.read_config()['clock'], self.read_config()['units']), ('12', 'metric'))
+
     def test_set_option_desks_is_a_clamped_number(self):
         self.write_config({'tiles': {}})
         backend.set_option('desks', '2')

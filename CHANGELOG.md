@@ -2,6 +2,11 @@
 
 ## 2.1.0 (2026-10-17)
 
+- **Each tile has its own menu:** right-click a tile, or press and hold it, for what that tile can do (12- or
+  24-hour time, °F or °C, a new chat, a widget's own screen...), then move or resize, send to a desk and remove.
+  Keyboard mode's M opens the focused tile's menu. Right-click on empty desk still opens the desk's menu.
+- **12-hour time was 24-hour:** the clock showed "20:40:43 PM" and sunrise/sunset 24-hour times on a 12-hour
+  locale, because Qt's `h` counts 0–23 unless the format has AP. New `clock` setting: auto, 12 or 24.
 - **Widgets Claude writes wait for you:** a widget made with Claude no longer goes straight onto the desk and
   starts its commands. The store shows every command it runs first, and **add to desk** is pinned to the SHA-256
   of the file you saw. Claude reads the OWL docs from a fresh copy in the cache, so it can no longer write to

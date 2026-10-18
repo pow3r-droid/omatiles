@@ -60,7 +60,13 @@ rm -rf ~/.config/omarchy/omatiles.json ~/.config/omarchy/omatiles ~/.cache/omati
 
 ## Using it
 
-**Right-click** anywhere on the desk for the menu:
+**Right-click a tile, or press and hold it,** for that tile's own menu, as on a phone's
+home screen. It has what the tile can do (the clock switches between 12- and 24-hour time,
+the weather between °F and °C, a chat starts a new chat or opens in a terminal, a store
+widget opens its own screen or shows what it runs), then **move or resize**, **send to
+desk N** and **remove**.
+
+**Right-click** empty desk for the desk's menu:
 
 - **arrange tiles:** drag a tile to move it, drag its corner to resize it, and use
   **→ 2** (one button per other desk) to send it to that desk. **✕** removes it, and
@@ -116,6 +122,7 @@ Everything below is optional:
 {
   "desks": 1,
   "units": "auto",
+  "clock": "auto",
   "dockMono": false,
   "dockSymbols": {"my-server-app": "f048b"},
   "dock": ["chromium", "com.mitchellh.ghostty", "obsidian"],
@@ -150,8 +157,10 @@ Everything below is optional:
 - **desks:** how many workspaces, counting from 1, are tile desktops: `1`, `2` or `3`.
   The desk asks on first run, and the right-click menu changes it. New tiled windows
   on those workspaces move to the next one. Tiles on desktops you turn off are kept.
-- **units:** `auto` follows your locale, or set `metric` or `imperial`. Times follow
-  your locale's 12 or 24 hour clock.
+- **units:** `auto` follows your locale, or set `metric` or `imperial`. The weather
+  tile's menu switches it.
+- **clock:** `auto` follows your locale's 12- or 24-hour time, or set `"12"` or `"24"`.
+  The clock tile's menu switches it, for every time on the desk.
 - **dock:** desktop entry ids, without `.desktop`.
 - **dockMono:** `true` draws the dock in the bar's color. About 80 common apps get their
   logo from [Simple Icons](https://simpleicons.org). Generic tools (files, calculator,

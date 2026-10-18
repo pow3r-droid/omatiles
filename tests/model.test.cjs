@@ -93,6 +93,12 @@ test('dock keeps only non-empty strings', () => {
   assert.equal(config.parse(JSON.stringify({dock: Array.from({length: 40}, (_, i) => 'a' + i)})).dock.length, 24);
 });
 
+test('clock is auto, 12 or 24', () => {
+  assert.equal(config.parse('{}').clock, 'auto');
+  for (const v of ['auto', '12', '24']) assert.equal(config.parse(JSON.stringify({clock: v})).clock, v);
+  for (const v of [12, '13', null, 'AM']) assert.equal(config.parse(JSON.stringify({clock: v})).clock, 'auto');
+});
+
 test('units are restricted to auto, metric and imperial', () => {
   assert.equal(config.parse('{}').units, 'auto');
   for (const u of ['auto', 'metric', 'imperial']) assert.equal(config.parse(JSON.stringify({units: u})).units, u);

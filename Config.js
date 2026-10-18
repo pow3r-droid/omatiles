@@ -9,7 +9,7 @@ var BUILTIN = ['clock', 'local', 'remote', 'calendar', 'weather', 'sun', 'chat-c
 var DOCK = ['chromium', 'com.mitchellh.ghostty', 'Alacritty', 'org.gnome.Nautilus', 'obsidian', 'spotify',
             'signal', 'typora', 'org.gnome.Calculator', 'localsend', 'xournalpp'];
 function defaults() {return {
-    grid:GRID, desks:0, dockMono:false, dockSymbols:{}, menuHint:true, units:'auto',
+    grid:GRID, desks:0, dockMono:false, dockSymbols:{}, menuHint:true, units:'auto', clock:'auto',
     tiles:{
         clock:{enabled:true,col:0,row:0,w:5,h:4},
         local:{enabled:true,col:5,row:0,w:6,h:4},
@@ -38,6 +38,8 @@ function parse(raw) {
     ['dockMono','menuHint'].forEach(function(k){ if(typeof input[k]==='boolean') base[k]=input[k]; });
     if(typeof input.desks==='number' && isFinite(input.desks)) base.desks=clampInt(input.desks,1,PAGES);
     if(['auto','metric','imperial'].indexOf(input.units)!==-1) base.units=input.units;
+    // 12- or 24-hour time; auto follows the locale.
+    if(['auto','12','24'].indexOf(input.clock)!==-1) base.clock=input.clock;
     // Per-app icon overrides: desktop id or app name -> a logo slug, an SVG path, a symbol or its hex code.
     if(input.dockSymbols && typeof input.dockSymbols==='object' && !Array.isArray(input.dockSymbols))
         Object.keys(input.dockSymbols).slice(0,64).forEach(function(k){ var v=input.dockSymbols[k]; if(typeof v==='string' && v.length<=12000) base.dockSymbols[k]=v; });

@@ -275,16 +275,19 @@ def prune_trash(days=1):
             if time.time() - slot.stat().st_mtime > days * 86400:
                 shutil.rmtree(slot, ignore_errors=True)
 
-OPTIONS = {'dockMono': bool, 'menuHint': bool, 'desks': int}
+# A switch, a number of desks, or one of a few choices.
+OPTIONS = {'dockMono': bool, 'menuHint': bool, 'desks': int,
+           'units': ('auto', 'metric', 'imperial'), 'clock': ('auto', '12', '24')}
 
 def set_option(name, value):
-    """Set one of the desk's own switches, or how many workspaces are desks."""
+    """Set one of the desk's own settings, from its menus."""
     kind = OPTIONS.get(name)
-    if kind is None or (kind is int and not value.isdigit()):
+    if kind is None or (kind is int and not value.isdigit()) or (isinstance(kind, tuple) and value not in kind):
         return
     with config_lock():
         config = load_config()
-        config[name] = value == 'true' if kind is bool else max(1, min(PAGES, int(value)))
+        config[name] = (value == 'true' if kind is bool else value if isinstance(kind, tuple)
+                        else max(1, min(PAGES, int(value))))
         save_config(config)
 
 def pin(app, on):

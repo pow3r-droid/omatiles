@@ -22,6 +22,11 @@ Rectangle {
     readonly property alias body: body
     // Enter on the focused tile (keyboard mode) runs this.
     signal activated()
+    // This tile's own menu items, as [{t: label, a: name}]; picking one emits action(name).
+    // The menu adds move or resize, send to a desk and remove for every tile.
+    property var actions: []
+    signal action(string name)
+    function openMenu(x, y) { var p = mapToItem(desk, x, y); desk.openTileMenu(tile, p.x, p.y); }
     onPlaceChanged: { liveCol = -1; liveRow = -1; liveW = -1; liveH = -1; }
     visible: !!place && place.enabled && (place.page || 1) === desk.page
     x: desk.cellX(col); y: desk.cellY(row)
@@ -38,10 +43,13 @@ Rectangle {
     Component.onCompleted: desk.registerTile(tile)
     Component.onDestruction: desk.unregisterTile(tile)
     function save() { desk.place(key, {col: col, row: row, w: spanW, h: spanH}); }
+    // Right-click, or press and hold, opens the tile's own menu (the launcher's long-press).
     MouseArea {
         anchors.fill: parent; z: -1
-        acceptedButtons: Qt.RightButton
-        onClicked: function(m) { var p = mapToItem(desk, m.x, m.y); desk.openMenu(p.x, p.y); }
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        pressAndHoldInterval: 500
+        onPressAndHold: function(m) { tile.openMenu(m.x, m.y); }
+        onClicked: function(m) { if (m.button === Qt.RightButton) tile.openMenu(m.x, m.y); else desk.dismiss(); }
     }
     Item {
         id: body
@@ -58,7 +66,7 @@ Rectangle {
         property real offX
         property real offY
         onPressed: function(m) {
-            if (m.button === Qt.RightButton) { var q = mapToItem(desk, m.x, m.y); desk.openMenu(q.x, q.y); return; }
+            if (m.button === Qt.RightButton) { tile.openMenu(m.x, m.y); return; }
             offX = m.x; offY = m.y;
         }
         onPositionChanged: function(m) {

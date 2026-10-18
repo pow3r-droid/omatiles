@@ -48,7 +48,7 @@ Scope {
     readonly property var monitor: deskScreen ? deskScreen.screen : null
     property int page: 1
     onDeskScreenChanged: if(deskScreen) page = deskScreen.page
-    onPageChanged: { menuOpen = false; dockPick = null; focusKey = ""; }
+    onPageChanged: { menuOpen = false; tileMenu = null; dockPick = null; focusKey = ""; }
     readonly property bool shown: monitor !== null
     // Tiled windows cover the desk; it then stops animating and polling widgets.
     readonly property var deskWs: monitor ? Hyprland.monitorFor(monitor).activeWorkspace : null
@@ -76,7 +76,7 @@ Scope {
     // Red is kept for failure and destruction only.
     readonly property color danger: Ui.danger(Color)
     readonly property bool metric: config.units === "metric" || (config.units === "auto" && Qt.locale().measurementSystem === Locale.MetricSystem)
-    readonly property bool h12: /a|AP/i.test(Qt.locale().timeFormat(Locale.ShortFormat))
+    readonly property bool h12: config.clock === "12" || (config.clock !== "24" && /a|AP/i.test(Qt.locale().timeFormat(Locale.ShortFormat)))
     // The locale's short date without the year: "M/d", "dd.MM", "MM-dd".
     readonly property string monthDay: Qt.locale().dateFormat(Locale.ShortFormat).replace(/[^dM]*y+[^dM]*/, "")
     property var owlPalette: OwlJs.themeFromToml("")
@@ -194,7 +194,14 @@ Scope {
         var h=Number(m[1])%12 + (m[3].toUpperCase()==="PM"?12:0), d=new Date(root.now);
         return new Date(d.getFullYear(),d.getMonth(),d.getDate(),h,Number(m[2])).getTime();
     }
-    function hm(ms, withAp) { return Qt.formatTime(new Date(ms), root.h12 ? (withAp ? "h:mm AP" : "h:mm") : "HH:mm"); }
+    // Qt's "h" counts 0-23 unless the format has AP, so 12-hour times are formatted with it.
+    function clockText(ms, seconds, withAp) {
+        var f = seconds ? "h:mm:ss" : "h:mm";
+        if (!root.h12) return Qt.formatTime(new Date(ms), seconds ? "HH:mm:ss" : "HH:mm");
+        var s = Qt.formatTime(new Date(ms), f + " AP");
+        return withAp ? s : s.split(" ")[0];
+    }
+    function hm(ms, withAp) { return clockText(ms, false, withAp); }
     function sunTime(text, withAp) { var t = clockTime(text); return isFinite(t) ? hm(t, withAp) : ""; }
     function span(ms) { var m=Math.max(0,Math.round(ms/60000)); return Math.floor(m/60)+"h "+(m%60)+"m"; }
 
@@ -262,6 +269,8 @@ Scope {
     readonly property var owlKeys: Object.keys(config.tiles).filter(function(k){ return k.indexOf("owl:")===0 && config.tiles[k].enabled; })
     property bool menuOpen: false
     property real menuX: 0
+    // The tile whose own menu is open (right-click or press and hold on it), like a launcher's widget menu.
+    property var tileMenu: null
     property real menuY: 0
     property bool storeOpen: false
     property string storeCategory: "all"
@@ -468,7 +477,7 @@ Scope {
         function create(): void { root.openCreate(); }
         function focus(): void { if (root.focusing) root.stopFocus(); else root.startFocus(); }
         function close(): void {
-            root.menuOpen = false; root.storeOpen = false; root.createOpen = false; root.editing = false; root.dockPick = null;
+            root.menuOpen = false; root.tileMenu = null; root.storeOpen = false; root.createOpen = false; root.editing = false; root.dockPick = null;
             root.stopFocus();
             if (root.screenWidget) root.screenWidget.closeScreen();
         }
@@ -516,10 +525,15 @@ Scope {
                 return Math.max(1, Math.min(max, Math.round((len+gap)/(cell+gap))));
             }
             function openMenu(x, y) {
-                root.menuX = x; root.menuY = y; root.menuOpen = true; root.dockPick = null;
+                root.menuX = x; root.menuY = y; root.menuOpen = true; root.tileMenu = null; root.dockPick = null;
                 root.loadThemes();
                 if (root.config.menuHint) root.setOption("menuHint", false);
             }
+            function openTileMenu(t, x, y) {
+                root.menuOpen = false; root.dockPick = null; root.menuX = x; root.menuY = y; root.tileMenu = t;
+            }
+            // A plain click on the desk or on a tile's empty part closes what's open.
+            function dismiss() { root.typing = false; root.menuOpen = false; root.tileMenu = null; root.dockPick = null; if (root.editing) root.editing = false; }
             function move(key, page) { root.run(removeProc, ["move", key, String(page)]); }
             function remove(key) { root.removeTile(key); }
             function place(key, g) { root.run(placeProc, ["place", key, JSON.stringify(g)]); }
@@ -537,7 +551,7 @@ Scope {
                 var k = e.key;
                 if (k === Qt.Key_Escape) {
                     if (root.screenWidget) root.screenWidget.closeScreen();
-                    else if (root.menuOpen || root.storeOpen || root.createOpen) { root.menuOpen = false; root.storeOpen = false; root.createOpen = false; }
+                    else if (root.tileMenu || root.menuOpen || root.storeOpen || root.createOpen) { root.tileMenu = null; root.menuOpen = false; root.storeOpen = false; root.createOpen = false; }
                     else if (root.editing) root.editing = false;
                     else root.stopFocus();
                 }
@@ -556,7 +570,7 @@ Scope {
                 else if (k === Qt.Key_Tab) root.cycle(1);
                 else if (k === Qt.Key_Backtab) root.cycle(-1);
                 else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) { var t = tileItems[root.focusKey]; if (t) t.activated(); }
-                else if (k === Qt.Key_M) desk.openMenu(desk.width/2 - 190, desk.height/3);
+                else if (k === Qt.Key_M) { var ft = root.focusKey && desk.tileItems[root.focusKey]; if (ft && ft.visible) { var c = ft.mapToItem(desk, ft.width/2, ft.height/2); desk.openTileMenu(ft, c.x, c.y); } else desk.openMenu(desk.width/2 - 190, desk.height/3); }
                 else if (k === Qt.Key_S) root.openStore();
                 else if (k === Qt.Key_A) root.editing = !root.editing;
                 else return;
@@ -569,7 +583,7 @@ Scope {
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 onClicked: function(m) {
                     if(m.button===Qt.RightButton) desk.openMenu(m.x, m.y);
-                    else { root.typing=false; root.menuOpen=false; root.dockPick=null; if(root.editing) root.editing=false; }
+                    else desk.dismiss();
                 }
             }
             // Grid cells, shown while arranging.
@@ -586,7 +600,9 @@ Scope {
             // ── Clock ───────────────────────────────────────────────────────
             Tile {
                 id: clockTile; desk: desk; key: "clock"; place: root.config.tiles.clock
-                readonly property string hms: Qt.formatTime(new Date(root.now), root.h12 ? "h:mm:ss" : "HH:mm:ss")
+                actions: [{t: root.h12 ? "use 24-hour time" : "use 12-hour time", a: "clock"}]
+                onAction: root.setOption("clock", root.h12 ? "24" : "12")
+                readonly property string hms: root.clockText(root.now, true, false)
                 readonly property real units: hms.length*0.1 + hms.replace(/:/g,"").length*0.55 + (hms.split(":").length-1)*0.2
                 Column {
                     anchors.centerIn: parent; width: parent.width; spacing: Style.spacing.md
@@ -618,6 +634,8 @@ Scope {
                 readonly property bool live: !!m && m.ok && root.now-m.updatedAt < 180000
                 readonly property var bat: m ? m.battery : null
                 onActivated: Quickshell.execDetached(["omarchy-launch-or-focus-tui","btop"])
+                actions: [{t: "open btop", a: "open"}]
+                onAction: activated()
                 SysInfo {
                     machine: localTile.m; user: localTile.m && localTile.m.who ? localTile.m.who : "this machine"
                     waiting: "Reading this machine…"; live: localTile.live; ink: root.ink; muted: root.muted; danger: root.danger
@@ -638,6 +656,9 @@ Scope {
                 readonly property string label: r.name || r.host.replace(/^.*@/, "")
                 readonly property bool live: !!m && m.ok
                 onActivated: if (r.host) root.refreshRemote()
+                actions: (r.host ? [{t: "check " + label + " now", a: "refresh"}] : [])
+                    .concat(r.link && r.link.url ? [{t: "open " + (r.link.name || r.link.url.replace(/^https?:\/\//, "")), a: "link"}] : [])
+                onAction: function(a) { if (a === "refresh") root.refreshRemote(); else Quickshell.execDetached(["omarchy-launch-webapp", r.link.url]); }
                 SysInfo {
                     visible: remoteTile.r.host !== ""
                     machine: remoteTile.m; user: remoteTile.m && remoteTile.m.who ? remoteTile.m.who : remoteTile.label
@@ -675,6 +696,8 @@ Scope {
                 id: calTile; desk: desk; key: "calendar"; place: root.config.tiles.calendar
                 readonly property real dayH: Math.max(16, Math.min(28, (body.height - 120) / 6))
                 onActivated: if (root.gcalState === "ok") addLink.start(); else if (root.gcalState !== "noclient" && !gcalAuth.running) gcalAuth.running = true
+                actions: root.gcalState === "ok" ? [{t: "add an event", a: "open"}] : root.gcalState !== "noclient" ? [{t: "connect Google Calendar", a: "open"}] : []
+                onAction: activated()
                 Column {
                     id: calHead; width: parent.width; spacing: Style.spacing.sm
                     Row {
@@ -790,6 +813,8 @@ Scope {
                 id: wxTile; desk: desk; key: "weather"; place: root.config.tiles.weather
                 readonly property var w: root.weather
                 onActivated: Quickshell.execDetached(["omarchy-launch-webapp", "https://wttr.in/" + (w ? encodeURIComponent(w.location) : "")])
+                actions: [{t: "open the forecast", a: "open"}, {t: root.metric ? "show °F" : "show °C", a: "units"}]
+                onAction: function(a) { if (a === "units") root.setOption("units", root.metric ? "imperial" : "metric"); else activated(); }
                 Column {
                     anchors.fill: parent; spacing: Style.spacing.xxl
                     Row {
@@ -850,6 +875,8 @@ Scope {
             // ── Sun & moon ──────────────────────────────────────────────────
             Tile {
                 id: sunTile; desk: desk; key: "sun"; place: root.config.tiles.sun
+                actions: [{t: root.h12 ? "use 24-hour time" : "use 12-hour time", a: "clock"}]
+                onAction: root.setOption("clock", root.h12 ? "24" : "12")
                 readonly property var today: root.weather && root.weather.days.length ? root.weather.days[0] : null
                 readonly property double rise: today ? root.clockTime(today.sunrise) : NaN
                 readonly property double set: today ? root.clockTime(today.sunset) : NaN
@@ -929,6 +956,8 @@ Scope {
                     required property string modelData
                     desk: deskItem; key: "chat-" + modelData; place: root.config.tiles["chat-" + modelData]
                     onActivated: chatView.focusInput()
+                    actions: [{t: "new chat", a: "new"}, {t: "open in a terminal", a: "terminal"}]
+                    onAction: function(a) { if (a === "new") root.newChat(chatTile.modelData); else root.openTerminal(chatTile.modelData); }
                     ChatTile {
                         id: chatView
                         agent: chatTile.modelData; name: root.agentName(chatTile.modelData); where: root.chatWhere
@@ -951,6 +980,15 @@ Scope {
                     required property string modelData
                     // `desk: desk` would bind the tile's own property to itself here.
                     desk: deskItem; key: modelData; place: root.config.tiles[modelData]; padded: false
+                    // Its own screen, if it has one, and its store page (what it is and what it runs).
+                    actions: (ow.hasScreen ? [{t: "open", a: "open"}] : []).concat([{t: "what it runs", a: "about"}])
+                    onAction: function(a) {
+                        if (a === "open") { ow.openScreen(); return; }
+                        if (modelData.indexOf("owl:local/") === 0) { root.run(reviewProc, ["review", modelData]); return; }
+                        var id = modelData.slice(4), w = null;
+                        for (var i = 0; i < root.storeWidgets.length; i++) if (root.storeWidgets[i] && root.storeWidgets[i].id === id) w = root.storeWidgets[i];
+                        root.openStore(); root.storePick = w;
+                    }
                     onActivated: {
                         if (ow.hasScreen) ow.openScreen();
                         else if (ow.tree && ow.tree.onTap) ow.tree.onTap(ow.width / 2 / ow.dp, ow.height / 2 / ow.dp);
@@ -1036,6 +1074,70 @@ Scope {
                 visible: root.focusing && !root.typing && !root.editing
                 anchors { horizontalCenter: parent.horizontalCenter; bottom: dock.top; bottomMargin: desk.gap * 2 }
                 ChipText { text: "Arrows pick a tile · Enter uses it · M menu · S store · A arrange · Esc leaves" }
+            }
+
+            // ── A tile's own menu (right-click or press and hold on it) ─────
+            // Its own items first, then what every tile has: move or resize, send to a desk, remove.
+            Rectangle {
+                id: tileMenuBox
+                readonly property var t: root.tileMenu && root.tileMenu.visible ? root.tileMenu : null
+                z: 50
+                opacity: t ? 1 : 0; visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                width: 300; height: tileCol.implicitHeight + 24
+                x: Math.max(desk.margin, Math.min(root.menuX, desk.width - width - 10)); y: Math.max(desk.margin, Math.min(root.menuY, desk.height - height - 10))
+                color: Color.background; border.width: 2; border.color: root.ink; radius: Style.cornerRadius
+                MouseArea { anchors.fill: parent; acceptedButtons: Qt.LeftButton | Qt.RightButton }
+                component TileMenuRow: Rectangle {
+                    id: row
+                    property string label
+                    property color tone: Color.foreground
+                    signal picked()
+                    width: parent ? parent.width : 0; height: 34; radius: Style.cornerRadius
+                    color: rowMouse.containsMouse ? Util.alpha(root.ink, 0.14) : "transparent"
+                    Accessible.role: Accessible.MenuItem; Accessible.name: label
+                    Text { x: 8; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 16; elide: Text.ElideRight; text: row.label; color: row.tone; font.family: Style.font.family; font.pixelSize: Style.font.heading - 1 }
+                    MouseArea { id: rowMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: row.picked() }
+                }
+                Column {
+                    id: tileCol; x: 12; y: 12; width: parent.width - 24; spacing: Style.spacing.xs
+                    Text {
+                        x: 8; width: parent.width - 16; elide: Text.ElideRight; bottomPadding: Style.spacing.xs
+                        text: tileMenuBox.t ? root.tileName(tileMenuBox.t.key).toUpperCase() : ""
+                        color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body; font.letterSpacing: 2
+                    }
+                    Repeater {
+                        model: tileMenuBox.t ? tileMenuBox.t.actions : []
+                        TileMenuRow {
+                            required property var modelData
+                            label: modelData.t
+                            onPicked: { var t = tileMenuBox.t; root.tileMenu = null; if (t) t.action(modelData.a); }
+                        }
+                    }
+                    Rectangle { visible: !!tileMenuBox.t && tileMenuBox.t.actions.length > 0; width: parent.width; height: 1; color: Util.alpha(Color.foreground, 0.12) }
+                    TileMenuRow { label: "move or resize"; onPicked: { var t = tileMenuBox.t; root.tileMenu = null; root.editing = true; if (t) root.focusKey = t.key; } }
+                    Item {
+                        visible: root.pages > 1; width: parent.width; height: 34
+                        Text { x: 8; anchors.verticalCenter: parent.verticalCenter; text: "send to desk"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.heading - 1 }
+                        Row {
+                            anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                            spacing: Style.spacing.sm
+                            Repeater {
+                                model: { var o = []; for (var n = 1; n <= root.pages; n++) if (n !== desk.page) o.push(n); return o; }
+                                Rectangle {
+                                    required property int modelData
+                                    Accessible.role: Accessible.Button; Accessible.name: "send to desk " + modelData
+                                    width: 34; height: 26; radius: Style.cornerRadius
+                                    color: sendTo.containsMouse ? Util.alpha(root.ink, 0.14) : "transparent"
+                                    border.width: 1; border.color: Util.alpha(root.ink, 0.4)
+                                    Text { anchors.centerIn: parent; text: parent.modelData; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                                    MouseArea { id: sendTo; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { var t = tileMenuBox.t; root.tileMenu = null; if (t) desk.move(t.key, parent.modelData); } }
+                                }
+                            }
+                        }
+                    }
+                    TileMenuRow { label: "remove"; tone: root.danger; onPicked: { var t = tileMenuBox.t; root.tileMenu = null; if (t) desk.remove(t.key); } }
+                }
             }
 
             // ── Right-click menu (the tablet's long-press menu) ─────────────
