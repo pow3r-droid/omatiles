@@ -42,7 +42,9 @@ def atomic(path, text):
             os.unlink(name)
 
 def curl(url):
-    return subprocess.run(['curl', '--silent', '--fail', '--location', '--max-time', '20', url], capture_output=True, text=True)
+    # The URL goes in on stdin (curl's --config -): the weather one holds the user's location.
+    return subprocess.run(['curl', '--silent', '--fail', '--location', '--max-time', '20', '--config', '-'],
+                          input='url = "%s"\n' % url.replace('\\', '\\\\').replace('"', '\\"'), capture_output=True, text=True)
 
 # ── Desk layout ───────────────────────────────────────────────────────────────
 # A 16 x 8 grid on each page: workspaces 1 to 3, as many as the user picks. Built-in tiles have
@@ -784,6 +786,27 @@ def log_turn(agent, who, text, error=False, detail=''):
         entry['detail'] = detail[:240]
     log_write(agent, log_read(agent) + [entry])
 
+def notify(title, body):
+    """A desktop notification for a widget, over D-Bus: its text never sits on a command line."""
+    try:
+        import gi
+        gi.require_version('Gio', '2.0')
+        from gi.repository import Gio, GLib
+        Gio.bus_get_sync(Gio.BusType.SESSION, None).call_sync(
+            'org.freedesktop.Notifications', '/org/freedesktop/Notifications', 'org.freedesktop.Notifications',
+            'Notify', GLib.Variant('(susssasa{sv}i)', ('OmaTiles', 0, '', title[:200], body[:2000], [], {}, -1)),
+            None, Gio.DBusCallFlags.NONE, 5000, None)
+    except Exception:
+        pass
+
+def notify_stdin():
+    try:
+        title, body = json.loads(stdin_text())
+    except (ValueError, TypeError):
+        return
+    if isinstance(title, str) and isinstance(body, str):
+        notify(title, body)
+
 TEXT_MAX = 131072  # what one command-line argument could hold before (MAX_ARG_STRLEN)
 
 def stdin_text():
@@ -1003,6 +1026,7 @@ if __name__ == '__main__':
         'unpin': lambda: pin(args[0], False),
         'recent': lambda: recent(args[0]),
         'probe': lambda: probe(args[0]) if args and args[0] in ('local', 'remote') else None,
+        'notify': notify_stdin,
         'ask': lambda: ask(args[0], '', retry=True) if args[1:] == ['--retry'] else ask(args[0], stdin_text()),
         'open': lambda: open_app(args[0]) if args and args[0] in AGENTS else None,
         'new': lambda: new_chat(args[0]),

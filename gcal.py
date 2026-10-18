@@ -171,6 +171,8 @@ def sync():
         status('error', str(error)[:120])
 
 def add(raw):
+    """Add an event. `raw` is its JSON, which the desk sends on stdin: event details on a
+    command line could be read by other local users for as long as the request runs."""
     d = json.loads(raw)
     tz = datetime.datetime.now().astimezone().tzinfo
     day = datetime.date.fromisoformat(d['date'])
@@ -185,6 +187,19 @@ def add(raw):
         body['location'] = d['location']
     call('POST', '/calendars/primary/events', body)
     sync()
+
+def notify(app, title, body):
+    """A desktop notification over D-Bus, so the event never sits on a command line."""
+    try:
+        import gi
+        gi.require_version('Gio', '2.0')
+        from gi.repository import Gio, GLib
+        Gio.bus_get_sync(Gio.BusType.SESSION, None).call_sync(
+            'org.freedesktop.Notifications', '/org/freedesktop/Notifications', 'org.freedesktop.Notifications',
+            'Notify', GLib.Variant('(susssasa{sv}i)', (app, 0, '', title, body, [], {}, -1)),
+            None, Gio.DBusCallFlags.NONE, 5000, None)
+    except Exception:
+        pass
 
 def remind():
     try:
@@ -201,7 +216,7 @@ def remind():
         key = '%s|%d' % (e['summary'], e['time'])
         if not e['allDay'] and 0 <= e['time'] - now <= 10 * 60000 and key not in sent:
             at = datetime.datetime.fromtimestamp(e['time'] / 1000).strftime('%-I:%M %p')
-            subprocess.run(['notify-send', '-a', 'Calendar', e['summary'], at + (' · ' + e['location'] if e['location'] else '')])
+            notify('Calendar', e['summary'], at + (' · ' + e['location'] if e['location'] else ''))
             sent.add(key)
     write_private(sent_path, json.dumps(sorted(sent)[-200:]))
 
@@ -212,6 +227,6 @@ if __name__ == '__main__':
     elif op == 'sync':
         sync()
     elif op == 'add':
-        add(sys.argv[2])
+        add(json.loads(sys.stdin.readline() or '""'))
     elif op == 'remind':
         remind()

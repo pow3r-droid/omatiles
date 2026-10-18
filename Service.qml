@@ -142,9 +142,11 @@ Scope {
     function run(proc, args) { if (proc.running) return false; proc.command = ["python3", root.backend].concat(args); proc.running = true; return true; }
     // Private text (a chat turn, a widget request) goes over stdin, never argv: other local
     // users can read a running process's arguments.
+    // Our scripts read one JSON string line; `raw` sends the text as it is (for wl-copy).
     component InputProcess: Process {
         property string input: ""
-        onStarted: { if (!stdinEnabled) return; write(JSON.stringify(input) + "\n"); input = ""; stdinEnabled = false; }
+        property bool raw: false
+        onStarted: { if (!stdinEnabled) return; write(raw ? input : JSON.stringify(input) + "\n"); input = ""; stdinEnabled = false; }
     }
     function runWith(proc, args, input) { if (proc.running) return false; proc.input = input; proc.stdinEnabled = true; return run(proc, args); }
     function setOption(name, value) { Quickshell.execDetached(["python3", root.backend, "set", name, String(value)]); }
@@ -272,7 +274,21 @@ Scope {
     property var screenWidget: null
     JsonFile { id: storeFile; path: root.cache + "store.json"; fallback: ({widgets: []}) }
     readonly property var storeWidgets: storeFile.value && storeFile.value.widgets || []
-    Owl.OwlHost { id: owlHost; monoFamily: Style.font.family; iconFamily: Style.font.family }
+    Owl.OwlHost {
+        id: owlHost; monoFamily: Style.font.family; iconFamily: Style.font.family
+        // What a widget copies or shows goes over stdin and D-Bus, never on a command line,
+        // where other local users could read it.
+        function act(widget, name, args) {
+            var s = function(i) { return args[i] === undefined || args[i] === null ? "" : String(args[i]); };
+            if (name === "copy" || name === "share") { root.copyText(s(0)); if (name === "share") root.notify("copied", s(0)); return; }
+            if (name === "notify") { root.notify(s(0), s(1)); return; }
+            defaultAct(widget, name, args);
+        }
+    }
+    InputProcess { id: copyProc; command: ["wl-copy"]; raw: true }
+    InputProcess { id: notifyProc }
+    function copyText(text) { if (copyProc.running) return; copyProc.input = text; copyProc.stdinEnabled = true; copyProc.running = true; }
+    function notify(title, body) { runWith(notifyProc, ["notify"], JSON.stringify([title, body])); }
     Process { id: storeFetch; property bool force: false; command: ["python3",root.backend,"store"].concat(force?["force"]:[]); onExited: { storeFile.reload(); compatFile.reload(); } }
     // A reload can change the widget being looked at: show its new entry, never the old one.
     // The install is pinned to the SHA-256 on screen, so it can't run something else anyway.
@@ -366,7 +382,7 @@ Scope {
     Process { id: calendarFetch; command: ["python3",root.gcal,"sync"]; onExited: { calendarFile.reload(); gcalStatusFile.reload(); } }
     Process { id: gcalAuth; command: ["python3",root.gcal,"auth"]; onExited: if(!calendarFetch.running) calendarFetch.running = true }
     Process { id: gcalRemind; command: ["python3",root.gcal,"remind"] }
-    Process {
+    InputProcess {
         id: gcalAdd
         stderr: StdioCollector { waitForEnd: true; onStreamFinished: root.addError=text.trim() ? "Could not save the event. Check the date (YYYY-MM-DD) and times (14:00)." : "" }
         onExited: function(exitCode) { if(exitCode===0) { root.adding=false; root.typing=false; if(!calendarFetch.running) calendarFetch.running=true; } }
@@ -1558,7 +1574,10 @@ Scope {
     }
     function saveEvent() {
         if(!evTitle.text.trim() || gcalAdd.running) return;
-        gcalAdd.command=["python3",root.gcal,"add",JSON.stringify({summary:evTitle.text.trim(),date:evDate.text.trim(),start:evStart.text.trim(),end:evEnd.text.trim()})];
+        // The event goes over stdin: on the command line other local users could read it.
+        gcalAdd.command=["python3",root.gcal,"add"];
+        gcalAdd.input=JSON.stringify({summary:evTitle.text.trim(),date:evDate.text.trim(),start:evStart.text.trim(),end:evEnd.text.trim()});
+        gcalAdd.stdinEnabled=true;
         root.addError=""; gcalAdd.running=true;
     }
 }

@@ -207,6 +207,61 @@ class CreateTests(Base):
         self.assertNotIn('["add", localRow.key', qml)
         self.assertIn('root.run(reviewProc, ["review", localRow.key])', qml)
 
+def load_gcal():
+    spec = importlib.util.spec_from_file_location('gcal_under_test', ROOT / 'gcal.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+class ArgvTests(Base):
+    """Nothing private goes on a command line, where other local users can read it."""
+    def test_no_process_on_the_desk_gets_typed_text_as_an_argument(self):
+        # The desk's text fields and chat input reach programs over stdin only. This would
+        # have caught the chat turn, the widget request and the calendar event.
+        qml = (ROOT / 'Service.qml').read_text()
+        pat = r'(command\s*[:=]\s*\[|run\(\w+,\s*\[|execDetached\(\[)[^\]]*\btext\b'
+        self.assertNotRegex(qml, pat)
+        self.assertNotIn('"wl-copy", "--"', qml)
+        self.assertNotIn('notify-send', qml)
+
+    def test_curl_gets_its_url_on_stdin(self):
+        self.sub(done('{}'))
+        backend.curl('https://wttr.in/Some%20Town?format=j1')
+        args, kwargs = self.run_mock.call_args
+        self.assertNotIn('Some', ' '.join(args[0]))
+        self.assertEqual(args[0][-2:], ['--config', '-'])
+        self.assertEqual(kwargs['input'], 'url = "https://wttr.in/Some%20Town?format=j1"\n')
+
+    def test_a_widget_notice_comes_on_stdin(self):
+        with patch.object(backend, 'notify') as sent, \
+                patch.object(backend.sys, 'stdin', io.StringIO(json.dumps(json.dumps(['title', 'body'])) + '\n')):
+            backend.notify_stdin()
+        sent.assert_called_once_with('title', 'body')
+        for raw in ['"nope"\n', '"[1, 2]"\n', '']:
+            with patch.object(backend, 'notify') as sent, patch.object(backend.sys, 'stdin', io.StringIO(raw)):
+                backend.notify_stdin()
+            sent.assert_not_called()
+
+    def test_calendar_events_come_on_stdin_and_reminders_over_dbus(self):
+        gcal = load_gcal()
+        src = (ROOT / 'gcal.py').read_text()
+        self.assertIn("add(json.loads(sys.stdin.readline()", src)
+        self.assertNotIn('notify-send', src)
+        posted = []
+        with patch.object(gcal, 'call', side_effect=lambda m, path, body=None, params=None: posted.append(body)), \
+                patch.object(gcal, 'sync'):
+            gcal.add(json.dumps({'summary': 'Dentist', 'date': '2026-10-20', 'start': '14:00'}))
+        self.assertEqual(posted[0]['summary'], 'Dentist')
+        events = Path(self.tmp.name) / 'events.json'
+        soon = int(time.time() * 1000) + 5 * 60000
+        events.write_text(json.dumps([{'summary': 'Dentist', 'time': soon, 'allDay': False, 'location': 'Main St'}]))
+        with patch.object(gcal, 'EVENTS', events), patch.object(gcal, 'CACHE', Path(self.tmp.name)), \
+                patch.object(gcal, 'notify') as shown:
+            gcal.remind()
+        self.assertEqual(shown.call_args.args[:2], ('Calendar', 'Dentist'))
+        self.assertIn('Main St', shown.call_args.args[2])
+        self.run_mock.assert_not_called()
+
 class PlaceTests(Base):
     def test_place_updates_one_tile_with_integer_geometry_and_keeps_others(self):
         self.write_config({'tiles': {'clock': {'enabled': True, 'col': 0, 'row': 0, 'w': 5, 'h': 4},

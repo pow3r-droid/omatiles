@@ -6,9 +6,11 @@
   starts its commands. The store shows every command it runs first, and **add to desk** is pinned to the SHA-256
   of the file you saw. Claude reads the OWL docs from a fresh copy in the cache, so it can no longer write to
   the plugin's own folder.
-- **Chat prompts stay off the command line:** the desk now hands a chat turn, and a widget request for Claude, to
-  the backend over stdin. Before, it was an argument of the waiting backend process, which other local users
+- **Chat prompts stay off the command line:** the desk now hands a chat turn, a widget request for Claude and a new
+  calendar event to its scripts over stdin. Before, it was an argument of the waiting backend process, which other local users
   can read. Reported in the marketplace review.
+- **Nothing private on a command line:** calendar reminders and widget notices go over D-Bus instead of notify-send,
+  a widget's copy goes to wl-copy on stdin, and curl reads its URL (the weather one holds your location) from stdin.
 - **Store installs run only what you saw:** adding a widget is pinned to the SHA-256 of the entry on screen. If
   the catalog reloads and changes that widget first, the install stops before downloading, and the store shows
   the new entry's commands. Reported in the marketplace review.
