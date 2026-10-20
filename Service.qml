@@ -549,7 +549,9 @@ Scope {
                 function onFocusingChanged() { if (root.focusing) desk.forceActiveFocus(); }
             }
             Keys.onPressed: function(e) {
-                if (!root.focusing) return;
+                // Keys a text field passes up (Enter after sending a chat line or saving an event)
+                // are not the desk's: only act when the desk itself has focus.
+                if (!root.focusing || !desk.activeFocus) return;
                 var k = e.key;
                 if (k === Qt.Key_Escape) {
                     if (root.screenWidget) root.screenWidget.closeScreen();
