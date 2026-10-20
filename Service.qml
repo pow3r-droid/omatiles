@@ -33,7 +33,7 @@ Scope {
     // Workspaces 1 to `pages` are desk pages: the desk shows on the monitor showing
     // one of them, with that page's tiles. Until the user picks, all three are.
     readonly property int pages: config.desks || Config.PAGES
-    readonly property bool choosing: loaded && !config.desks
+    readonly property bool choosing: loaded && !configError && !config.desks
     // Tiles kept on desks the user turned off: they come back with those desks.
     readonly property int hiddenTiles: Object.keys(config.tiles).filter(function(k){ var t = config.tiles[k]; return t.enabled && (t.page || 1) > pages; }).length
     readonly property Item deskItem: desk
@@ -117,8 +117,10 @@ Scope {
     FileView {
         id: settings; printErrors: false; path: root.home + "/.config/omarchy/omatiles.json"; watchChanges: true
         onFileChanged: reload()
-        onLoaded: { root.config=Config.parse(text()); root.loaded=true; }
+        onLoaded: { var c = Config.parse(text()); root.configError = !c; if (c) root.config = c; root.loaded = true; }
     }
+    // A hand edit broke the file: keep the last good settings, and the backend saves nothing until it's fixed.
+    property bool configError: false
     // Nothing draws or polls until the settings are read, so the default layout never flashes.
     property bool loaded: false
     JsonFile { id: calendarFile; path: root.cache + "gcal-events.json"; fallback: [] }
@@ -1046,7 +1048,12 @@ Scope {
                 MouseArea { id: chipMouse; anchors.fill: parent; anchors.margins: -6; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: parent.hit() }
             }
             Chip {
-                visible: root.config.menuHint && !root.choosing && !root.editing && !root.menuOpen && !root.storeOpen && !root.createOpen && root.undoKey === ""
+                visible: root.configError
+                anchors { horizontalCenter: parent.horizontalCenter; bottom: dock.top; bottomMargin: desk.gap * 2 }
+                ChipText { text: "omatiles.json has an error, so changes aren't saved. Fix the file and the desk reloads it." }
+            }
+            Chip {
+                visible: root.config.menuHint && !root.configError && !root.choosing && !root.editing && !root.menuOpen && !root.storeOpen && !root.createOpen && root.undoKey === ""
                 anchors { horizontalCenter: parent.horizontalCenter; bottom: dock.top; bottomMargin: desk.gap * 2 }
                 ChipText { text: "Right-click the desk for widgets, themes and arranging" }
                 ChipLink { text: ""; onHit: root.setOption("menuHint", false) }

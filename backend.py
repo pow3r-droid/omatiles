@@ -78,7 +78,17 @@ def desk_count(config):
     return max(1, min(PAGES, n)) if isinstance(n, int) and not isinstance(n, bool) and n > 0 else PAGES
 
 def save_config(config):
-    atomic(CONFIG / CONFIG_FILE, json.dumps(config, indent=1))
+    # A file that doesn't parse was broken by a hand edit and still holds the user's
+    # layout: load_config read it as empty, so saving now would wipe it.
+    path = CONFIG / CONFIG_FILE
+    try:
+        if not isinstance(json.loads(path.read_text()), dict):
+            raise ValueError
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError):
+        sys.exit('%s has an error; nothing was saved' % path)
+    atomic(path, json.dumps(config, indent=1))
 
 def config_lock():
     CACHE.mkdir(parents=True, exist_ok=True)

@@ -32,9 +32,11 @@ function services(list) {
     return Array.isArray(list) ? list.filter(function(s){ return s && typeof s.unit === 'string'; }).slice(0, 6)
         .map(function(s){ return {label: str(s.label, 40) || s.unit, unit: s.unit, user: s.user !== false}; }) : [];
 }
+// null when the file isn't a JSON object (a typo while editing it by hand): the desk
+// then keeps what it had instead of starting over from the defaults.
 function parse(raw) {
-    var base=defaults(), input; try {input=JSON.parse(raw);} catch(e){return base;}
-    if(!input || typeof input!=='object') return base;
+    var base=defaults(), input; try {input=JSON.parse(raw);} catch(e){return null;}
+    if(!input || typeof input!=='object' || Array.isArray(input)) return null;
     ['dockMono','menuHint'].forEach(function(k){ if(typeof input[k]==='boolean') base[k]=input[k]; });
     if(typeof input.desks==='number' && isFinite(input.desks)) base.desks=clampInt(input.desks,1,PAGES);
     if(['auto','metric','imperial'].indexOf(input.units)!==-1) base.units=input.units;

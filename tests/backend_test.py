@@ -1176,6 +1176,19 @@ class MiscTests(Base):
         (self.config / backend.CONFIG_FILE).unlink()
         self.assertEqual(backend.load_config()['tiles'], {})
 
+    def test_a_broken_config_is_never_overwritten(self):
+        # A typo in a hand edit keeps the user's layout; the desk says the file has an error.
+        for broken in ('{"tiles": {"clock": {"col": 3}},', '[1,2]', ''):
+            (self.config / backend.CONFIG_FILE).write_text(broken)
+            for fn, args in ((backend.set_option, ('units', 'metric')), (backend.pin, ('app', True)),
+                             (backend.place, ('clock', '{"col":1}'))):
+                _, code = self.call(fn, *args)
+                self.assertIn('has an error', str(code))
+                self.assertEqual((self.config / backend.CONFIG_FILE).read_text(), broken)
+        (self.config / backend.CONFIG_FILE).unlink()
+        backend.set_option('units', 'metric')
+        self.assertEqual(self.read_config()['units'], 'metric')
+
     def test_owl_sizes(self):
         self.assertEqual(backend.owl_sizes('size: 6x4\nminSize: 3 x 2'), ((6, 4), (3, 2)))
         self.assertEqual(backend.owl_sizes('  size: 5x3'), ((5, 3), (3, 2)))

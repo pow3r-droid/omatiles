@@ -18,9 +18,10 @@ const rgb = (r, g, b) => ({r, g, b});
 const black = rgb(0, 0, 0), white = rgb(1, 1, 1);
 
 // ── Config.parse ──────────────────────────────────────────────────────────────
-test('parse falls back to defaults on bad JSON, null and non-objects', () => {
+test('parse rejects bad JSON, null and non-objects, so the desk keeps its last good settings', () => {
+  for (const raw of ['{not json', 'null', '5', '"x"', '[1,2]', '', undefined]) assert.equal(config.parse(raw), null, String(raw));
   const d = config.defaults();
-  for (const raw of ['{not json', 'null', '5', '"x"', '', undefined]) assert.deepEqual(config.parse(raw), d, String(raw));
+  assert.deepEqual(config.parse('{}'), d);
   assert.equal(d.grid, 16);
   assert.deepEqual(Object.keys(d.tiles).sort(), config.BUILTIN.slice().sort());
   assert.equal(d.tiles.remote.enabled, false);
