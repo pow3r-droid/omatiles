@@ -16,6 +16,6 @@ Rectangle {
     color: mouse.containsMouse ? Util.alpha(ink, 0.22) : Util.alpha(ink, 0.08)
     border.width: 1; border.color: Util.alpha(ink, mouse.containsMouse ? 0.7 : 0.4)
     implicitWidth: label.implicitWidth + 2 * Style.spacing.xxl
-    Text { id: label; anchors.centerIn: parent; text: action.text; color: action.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
+    DeskText { id: label; anchors.centerIn: parent; text: action.text; color: action.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
     MouseArea { id: mouse; anchors.fill: parent; hoverEnabled: true; cursorShape: action.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor; onClicked: action.clicked() }
 }

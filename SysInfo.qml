@@ -37,10 +37,10 @@ Row {
         width: info.width*0.6; spacing: Style.spacing.xs
         Row {
             spacing: Style.spacing.xl; bottomPadding: Style.spacing.md
-            Text { text: info.logo(info.machine ? info.machine.os : ""); color: info.ink; font.family: Style.font.family; font.pixelSize: 34 }
+            DeskText { text: info.logo(info.machine ? info.machine.os : ""); color: info.ink; font.family: Style.font.family; font.pixelSize: 34 }
             Column {
                 spacing: Style.spacing.sm
-                Text { text: info.user; color: info.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading }
+                DeskText { text: info.user; color: info.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading }
                 Row {
                     spacing: Style.spacing.xs
                     Repeater {
@@ -55,15 +55,15 @@ Row {
             Row {
                 required property var modelData
                 width: parent.width; spacing: Style.spacing.lg
-                Text { width: 72; text: modelData[0]; color: info.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
-                Text { width: parent.width-80; text: modelData[1]; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body; elide: Text.ElideRight }
+                DeskText { width: 72; text: modelData[0]; color: info.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                DeskText { width: parent.width-80; text: modelData[1]; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body; elide: Text.ElideRight }
             }
         }
-        Text { visible: !info.machine; width: parent.width; wrapMode: Text.Wrap; text: info.waiting; color: info.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+        DeskText { visible: !info.machine; width: parent.width; wrapMode: Text.Wrap; text: info.waiting; color: info.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
     }
     Column {
         width: info.width*0.4-info.spacing; spacing: Style.spacing.md
-        Text { visible: info.services.length > 0; text: "services"; color: info.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+        DeskText { visible: info.services.length > 0; text: "services"; color: info.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
         Repeater {
             model: info.services
             Row {
@@ -71,14 +71,14 @@ Row {
                 width: parent.width; spacing: Style.spacing.md
                 Rectangle { width: 7; height: 7; y: 5; radius: 4; color: modelData.ok ? info.ink : info.danger }
                 // The state is spelled out too, so it never rests on color alone; the name gives way first.
-                Text {
+                DeskText {
                     width: Math.max(0, Math.min(implicitWidth, parent.width - 7 - 2 * parent.spacing - svcState.implicitWidth)); elide: Text.ElideRight
                     text: modelData.t; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body
                 }
-                Text { id: svcState; leftPadding: Style.spacing.sm; text: modelData.state || ""; color: modelData.ok ? info.muted : info.danger; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                DeskText { id: svcState; leftPadding: Style.spacing.sm; text: modelData.state || ""; color: modelData.ok ? info.muted : info.danger; font.family: Style.font.family; font.pixelSize: Style.font.body }
             }
         }
-        Text { visible: conts.count > 0; text: "containers"; color: info.muted; font.family: Style.font.family; font.pixelSize: Style.font.body; topPadding: Style.spacing.sm }
+        DeskText { visible: conts.count > 0; text: "containers"; color: info.muted; font.family: Style.font.family; font.pixelSize: Style.font.body; topPadding: Style.spacing.sm }
         Grid {
             width: parent.width; columns: 2; rowSpacing: Style.spacing.xs; columnSpacing: Style.spacing.lg
             Repeater {
@@ -88,25 +88,25 @@ Row {
                     required property var modelData
                     width: (parent.width-Style.spacing.lg)/2; spacing: 5
                     Rectangle { width: 5; height: 5; y: 6; radius: 3; color: modelData.up ? info.ink : info.danger }
-                    Text { width: parent.width-10; elide: Text.ElideRight; text: modelData.name + (modelData.up ? "" : " · down"); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                    DeskText { width: parent.width-10; elide: Text.ElideRight; text: modelData.name + (modelData.up ? "" : " · down"); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
                 }
             }
         }
-        Text {
+        DeskText {
             visible: !!info.machine && !!info.machine.failed && info.machine.failed.length>0
             width: parent.width; wrapMode: Text.Wrap; font.family: Style.font.family; font.pixelSize: Style.font.body; color: info.danger
             text: info.machine && info.machine.failed ? "failed: " + info.machine.failed.join(", ") : ""
         }
         Flow {
             width: parent.width; spacing: Style.spacing.xl; topPadding: Style.spacing.sm
-            Text {
+            DeskText {
                 visible: info.status !== ""
                 width: Math.min(implicitWidth, parent.width); wrapMode: Text.Wrap
                 font.family: Style.font.family; font.pixelSize: Style.font.body
                 color: info.live ? info.muted : info.danger
                 text: info.status
             }
-            Text {
+            DeskText {
                 visible: info.refreshable
                 text: " refresh"; font.family: Style.font.family; font.pixelSize: Style.font.body
                 color: refreshMouse.containsMouse ? Color.foreground : info.ink

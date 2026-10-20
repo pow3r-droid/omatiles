@@ -87,7 +87,7 @@ Rectangle {
         Accessible.role: Accessible.Button
         color: Util.alpha(tone, hot ? 0.45 : 0.2)
         border.width: 1; border.color: tone
-        Text { id: label; anchors.centerIn: parent; text: handle.glyph; color: handle.tone; font.family: Style.font.family; font.pixelSize: Style.font.body }
+        DeskText { id: label; anchors.centerIn: parent; text: handle.glyph; color: handle.tone; font.family: Style.font.family; font.pixelSize: Style.font.body }
     }
     Handle {
         glyph: "󰑝"; hot: resize.pressed; Accessible.name: "resize"

@@ -1,7 +1,7 @@
 import QtQuick
 import qs.Commons
 // Wrapping body text.
-Text {
+DeskText {
     font.family: Style.font.family
     color: Color.foreground
     font.pixelSize: Style.font.subtitle

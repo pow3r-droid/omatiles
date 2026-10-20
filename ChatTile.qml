@@ -45,7 +45,7 @@ Item {
         onLoadFailed: chat.log = []
     }
 
-    component Link: Text {
+    component Link: DeskText {
         id: link
         property bool on: true
         signal hit()
@@ -58,8 +58,8 @@ Item {
         id: head; width: parent.width; height: 22
         Row {
             spacing: Style.spacing.lg; anchors.verticalCenter: parent.verticalCenter
-            Text { id: chatName; text: chat.name; color: chat.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading }
-            Text { y: chatName.baselineOffset - baselineOffset; text: "on " + chat.where; color: chat.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+            DeskText { id: chatName; text: chat.name; color: chat.ink; font.family: Style.font.family; font.pixelSize: Style.font.heading }
+            DeskText { y: chatName.baselineOffset - baselineOffset; text: "on " + chat.where; color: chat.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
         }
         Row {
             anchors { right: parent.right; verticalCenter: parent.verticalCenter }
@@ -79,7 +79,7 @@ Item {
         onHeightChanged: contentY = Math.max(0, contentHeight - height)
         Column {
             id: messages; width: scroll.width; spacing: Style.spacing.xxl
-            Text {
+            DeskText {
                 visible: chat.log.length === 0 && !chat.busy; width: parent.width; wrapMode: Text.Wrap
                 text: chat.available
                     ? "Ask " + chat.name + " anything. Turns run " + (chat.readOnly ? "read-only " : "with its profile's tools ") + (chat.where === "this machine" ? "here" : "on " + chat.where) + ". The conversation stays until new chat; terminal opens the full CLI on it."
@@ -95,10 +95,10 @@ Item {
                     readonly property bool mine: modelData.who === "you"
                     readonly property bool lastError: !!modelData.error && index === chat.log.length - 1
                     width: messages.width; spacing: Style.spacing.xs
-                    Text {
+                    DeskText {
                         width: parent.width; wrapMode: Text.Wrap
                         leftPadding: entry.mine ? 0 : Style.spacing.xxl
-                        text: entry.mine ? "› " + entry.modelData.text : entry.modelData.text
+                        text: entry.mine ? "› " + entry.modelData.text : entry.modelData.error ? entry.modelData.text : Ui.safeMarkdown(entry.modelData.text)
                         textFormat: entry.mine || entry.modelData.error ? Text.PlainText : Text.MarkdownText
                         color: entry.mine ? chat.ink : entry.modelData.error ? chat.danger : Color.foreground
                         font.family: Style.font.family; font.pixelSize: Style.font.subtitle; lineHeight: 1.15
@@ -106,7 +106,7 @@ Item {
                         MouseArea { anchors.fill: parent; acceptedButtons: Qt.NoButton; cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor }
                     }
                     // What the CLI actually said, for when the sentence above is not enough.
-                    Text {
+                    DeskText {
                         visible: entry.lastError && !!entry.modelData.detail
                         width: parent.width; leftPadding: Style.spacing.xxl; wrapMode: Text.WrapAnywhere; maximumLineCount: 3; elide: Text.ElideRight
                         text: entry.modelData.detail || ""; color: chat.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
@@ -122,10 +122,10 @@ Item {
                 // The shell restarted (or the backend died) while a reply was on its way.
                 visible: !chat.busy && !!chat.last && chat.last.who === "you"
                 width: parent.width; spacing: Style.spacing.xs; leftPadding: Style.spacing.xxl
-                Text { width: parent.width - parent.leftPadding; wrapMode: Text.Wrap; text: "No reply came back."; color: chat.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                DeskText { width: parent.width - parent.leftPadding; wrapMode: Text.Wrap; text: "No reply came back."; color: chat.muted; font.family: Style.font.family; font.pixelSize: Style.font.body }
                 Link { text: " send it again"; onHit: chat.retry() }
             }
-            Text {
+            DeskText {
                 visible: chat.busy; leftPadding: Style.spacing.xxl
                 text: chat.name + " is thinking · " + Math.max(0, Math.round((chat.now - chat.sentAt) / 1000)) + "s"
                 color: chat.muted; font.family: Style.font.family; font.pixelSize: Style.font.body
@@ -145,7 +145,7 @@ Item {
             verticalAlignment: TextInput.AlignVCenter
             color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.subtitle; clip: true; selectByMouse: true
             selectionColor: Util.alpha(chat.ink, 0.4)
-            Text {
+            DeskText {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: !line.text; text: chat.busy ? "waiting for " + chat.name + "…" : "message " + chat.name + "…"
                 color: chat.muted; font: line.font
@@ -155,7 +155,7 @@ Item {
             Keys.onEscapePressed: { focus = false; if (chat.desk) { chat.desk.typing = false; if (chat.desk.focusing) chat.desk.forceActiveFocus(); } }
             onActiveFocusChanged: if (!activeFocus && chat.desk) chat.desk.typing = false
         }
-        Text {
+        DeskText {
             anchors { right: parent.right; rightMargin: Style.spacing.xxl; verticalCenter: parent.verticalCenter }
             text: ""; font.family: Style.font.family; font.pixelSize: Style.font.subtitle
             color: line.text.trim() && !chat.busy ? chat.ink : chat.muted
