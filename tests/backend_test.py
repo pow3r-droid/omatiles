@@ -1097,6 +1097,27 @@ class TraceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             icontrace.read_png(bad)
 
+    def test_pixel_data_must_match_the_header(self):
+        import struct, zlib
+        chunk = lambda k, d: struct.pack('>I', len(d)) + k + d + struct.pack('>I', zlib.crc32(k + d) & 0xffffffff)
+        def write(name, w, h, raw, ihdr=None):
+            f = self.dir / name
+            f.write_bytes(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', ihdr or struct.pack('>IIBBBBB', w, h, 8, 6, 0, 0, 0))
+                          + chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b''))
+            return f
+        # A 1 x 1 icon whose 30 KB of data inflates to 30 MB: refused without inflating it all.
+        bomb = write('bomb.png', 1, 1, bytes(30 * 1024 * 1024))
+        self.assertLess(bomb.stat().st_size, 64 * 1024)
+        short = write('short.png', 64, 64, bytes(10))
+        no_header = self.dir / 'nohead.png'
+        no_header.write_bytes(b'\x89PNG\r\n\x1a\n' + chunk(b'IEND', b''))
+        bad_type = write('type.png', 1, 1, bytes(5), struct.pack('>IIBBBBB', 1, 1, 8, 5, 0, 0, 0))
+        for f in (bomb, short, no_header, bad_type):
+            with self.assertRaises(ValueError, msg=f.name):
+                icontrace.read_png(f)
+        png(self.dir / 'ok.png', 3, 2, lambda x, y: (x, y, 0, 255))
+        self.assertEqual(icontrace.read_png(self.dir / 'ok.png')[2][1][2], (2, 1, 0, 255))
+
 
 class MarksTests(Base):
     def test_the_backend_never_writes_bytecode_into_the_plugin(self):

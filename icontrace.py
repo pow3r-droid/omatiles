@@ -20,12 +20,14 @@ def read_png(path):
     data = Path(path).read_bytes()
     if data[:8] != b'\x89PNG\r\n\x1a\n':
         raise ValueError('not a PNG')
-    pos, idat, palette, trns = 8, [], None, None
+    pos, idat, palette, trns, w = 8, [], None, None, None
     while pos < len(data):
         n, kind = struct.unpack('>I4s', data[pos:pos + 8])
         body = data[pos + 8:pos + 8 + n]
         pos += 12 + n
         if kind == b'IHDR':
+            if len(body) != 13:
+                raise ValueError('a broken header')
             w, h, depth, ctype, _, _, interlace = struct.unpack('>IIBBBBB', body)
         elif kind == b'PLTE':
             palette = [tuple(body[i:i + 3]) for i in range(0, len(body), 3)]
@@ -35,13 +37,21 @@ def read_png(path):
             idat.append(body)
         elif kind == b'IEND':
             break
-    if depth != 8 or interlace:
+    if w is None:
+        raise ValueError('no header')
+    if depth != 8 or interlace or ctype not in (0, 2, 3, 4, 6) or (ctype == 3 and not palette):
         raise ValueError('only 8-bit, non-interlaced PNGs')
-    if w * h > 1024 * 1024:
+    if not w or not h or w * h > 1024 * 1024:
         raise ValueError('too big for an icon')
     channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[ctype]
-    raw = zlib.decompress(b''.join(idat))
-    stride, prev, rows, i = w * channels, bytearray(w * channels), [], 0
+    stride = w * channels
+    # The header fixes the pixel data's size, so a small file that inflates past it (a
+    # deflate bomb reaches about 1000:1) stops one byte over, before it fills memory.
+    size = h * (1 + stride)
+    raw = zlib.decompressobj().decompress(b''.join(idat), size + 1)
+    if len(raw) != size:
+        raise ValueError('pixel data does not match the header')
+    prev, rows, i = bytearray(stride), [], 0
     for _ in range(h):
         f, line = raw[i], bytearray(raw[i + 1:i + 1 + stride])
         i += 1 + stride
