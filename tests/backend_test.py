@@ -1284,6 +1284,20 @@ class GuardTests(unittest.TestCase):
                     hits += ['%s:%d: [%s] %s' % ('/'.join(parts), n, what, found) for what, found in self.leaks(line)]
         self.assertEqual(hits, [], '\n' + '\n'.join(hits))
 
+    def test_no_private_word_anywhere_in_history(self):
+        # A word removed from the files stays in every older commit of a public repo.
+        words = self.private_words()
+        if not words or not (ROOT / '.git').exists() or not shutil.which('git'):
+            self.skipTest('no private words or no git history here')
+        git = lambda *a, **kw: subprocess.run(['git', '-C', str(ROOT)] + list(a), capture_output=True, text=True, **kw)
+        commits = git('rev-list', 'HEAD').stdout.split()
+        with tempfile.NamedTemporaryFile('w', suffix='.txt') as f:
+            f.write('\n'.join(words) + '\n'); f.flush()
+            found = git('grep', '-i', '-F', '-l', '-f', f.name, *commits).stdout.split()
+        found += ['message of ' + c for c in commits
+                  if any(w in git('log', '-1', '--format=%B', c).stdout.lower() for w in words)]
+        self.assertEqual(found, [], 'private words in history (git filter-repo --replace-text):\n' + '\n'.join(found[:20]))
+
     def test_the_patterns_catch_what_they_are_for(self):
         # Built from pieces, so this file holds none of them whole.
         caught = {
