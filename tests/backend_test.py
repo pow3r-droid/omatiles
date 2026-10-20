@@ -132,6 +132,9 @@ class CreateTests(Base):
         self.assertEqual(given, str(self.cache / 'owl-ref'))
         self.assertNotIn(str(backend.OWL), ' '.join(claude))
         self.assertTrue((self.cache / 'owl-ref' / 'LANGUAGE.md').is_file())
+        # Its Read tool stays in the widget folder and the docs, away from ~/.ssh or the Google token.
+        self.assertIn('--restricted', claude)
+        self.assertIn('--strict-mcp-config', claude)
 
     def test_a_made_widget_goes_on_only_with_the_hash_that_was_shown(self):
         out, _ = self.create()
@@ -826,6 +829,9 @@ class ChatTests(Base):
     def test_turn_commands_stay_read_only(self):
         c = backend.turn_command('claude', '', {})
         self.assertIn('--tools WebSearch,WebFetch', c)
+        # --tools alone still loads the user's settings, hooks and MCP servers.
+        self.assertIn('--restricted --strict-mcp-config', c)
+        self.assertIn('--allowedTools WebSearch,WebFetch', c)
         self.assertNotIn('--resume', c)
         self.assertIn('--resume s1', backend.turn_command('claude', 's1', {}))
         c = backend.turn_command('codex', '', {})

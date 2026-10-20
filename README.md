@@ -213,7 +213,9 @@ Everything runs as you. Nothing needs root. The desk runs:
   step, from the desk to the backend to the CLI, never as a command-line argument, which
   other local users could read. A widget request for Claude travels the same way. No one
   is there to approve tools, so tools are limited:
-  - Claude Code: web search and fetch only (`--tools WebSearch,WebFetch`)
+  - Claude Code: web search and fetch only (`--tools WebSearch,WebFetch`), in restricted
+    mode without your settings, hooks or MCP servers (`--restricted --strict-mcp-config`,
+    Claude Code 2.1.304 or later)
   - Codex: its read-only sandbox (`-s read-only`)
   - Grok: web search only
   - Hermes: runs as its profile is configured, since its tools are set per profile.
@@ -229,8 +231,9 @@ Everything runs as you. Nothing needs root. The desk runs:
   installed for you.
 - **New widgets:** Claude Code (Sonnet) writes one OWL file in the widget's own folder,
   and the vendored `owl.jar` checker reviews it. Claude Code runs with only its Read,
-  Write and Edit tools, without your Claude settings or MCP servers. It reads the OWL
-  docs from a fresh copy in the cache, so it can't write to the plugin's own folder.
+  Write and Edit tools, without your Claude settings, hooks or MCP servers, and in
+  restricted mode, so those tools stay inside the widget's folder and the OWL docs. It
+  reads the docs from a fresh copy in the cache, so it can't write to the plugin's own folder.
   Nothing it writes runs until you've seen its commands in the store and added it: that
   add is pinned to the SHA-256 of the file you were shown, like a store install. Older
   widgets made with Claude show **review to add** for the same reason.

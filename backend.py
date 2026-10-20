@@ -431,8 +431,9 @@ def create(request, page=1):
     ref = owl_reference()
     prompt = CREATE_PROMPT.format(lang=ref / 'LANGUAGE.md', ex1=ref / 'examples' / 'feeds.owl',
                                   ex2=ref / 'examples' / 'todo.owl', request=request)
-    # Sonnet without the user's settings or MCP servers: just the files it needs.
-    base = ['claude', '-p', '--model', 'sonnet', '--output-format', 'json', '--setting-sources', 'project',
+    # Sonnet without the user's settings, hooks or MCP servers, and (--restricted) with its file
+    # tools held to the widget folder and the docs: just the files it needs.
+    base = ['claude', '-p', '--model', 'sonnet', '--output-format', 'json', '--restricted',
             '--strict-mcp-config', '--tools', 'Read,Write,Edit', '--permission-mode', 'acceptEdits',
             '--add-dir', str(ref)]
     session, ok, report = None, False, 'Claude did not write widget.owl'
@@ -707,7 +708,11 @@ def turn_command(agent, session, agents):
         return 'grok' + (' -c' if session else '') + (' --prompt-file /dev/stdin --cwd . --permission-mode dontAsk'
                                                        ' --tools web_search --disallowed-tools search_tool,use_tool')
     if agent == 'claude':
-        return 'claude -p --output-format json --tools WebSearch,WebFetch' + (' --resume ' + session if session else '')
+        # --tools limits only the built-in tools; --restricted and --strict-mcp-config also leave out
+        # the user's settings, hooks and MCP servers, whose pre-approved tools would run unattended.
+        # With no settings to approve them, the two web tools are allowed here.
+        return ('claude -p --output-format json --restricted --strict-mcp-config --tools WebSearch,WebFetch'
+                ' --allowedTools WebSearch,WebFetch' + (' --resume ' + session if session else ''))
     if agent == 'codex':
         if session:
             return "codex exec resume --json --skip-git-repo-check -c 'sandbox_mode=\"read-only\"' " + session + ' -'
