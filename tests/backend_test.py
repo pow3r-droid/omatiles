@@ -246,6 +246,10 @@ class ArgvTests(Base):
                 backend.notify_stdin()
             sent.assert_not_called()
 
+    def test_calendar_asks_google_for_events_and_the_calendar_list_only(self):
+        self.assertEqual(sorted(load_gcal().SCOPE.split()), ['https://www.googleapis.com/auth/calendar.calendarlist',
+                                                             'https://www.googleapis.com/auth/calendar.events'])
+
     def test_calendar_events_come_on_stdin_and_reminders_over_dbus(self):
         gcal = load_gcal()
         src = (ROOT / 'gcal.py').read_text()

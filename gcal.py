@@ -32,7 +32,9 @@ CLIENT = DIR / 'google_client.json'
 TOKEN = DIR / 'google_token.json'
 CACHE = Path.home() / '.cache/omatiles'
 EVENTS = CACHE / 'gcal-events.json'
-SCOPE = 'https://www.googleapis.com/auth/calendar'
+# Events on your calendars and the list of calendars you see, which is all the desk reads,
+# adds or subscribes to. The full `calendar` scope could also delete calendars and change sharing.
+SCOPE = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist'
 API = 'https://www.googleapis.com/calendar/v3'
 
 def calendar_settings():

@@ -196,7 +196,9 @@ The calendar uses your own Google OAuth client, so no third party sees your data
 2. Create an OAuth client of type **Desktop app** and download its JSON.
 3. Save the JSON as `~/.config/omarchy/omatiles/google_client.json`.
 4. Click **Connect Google Calendar** on the tile. Sign-in uses a loopback redirect with PKCE.
-   The token is saved beside the client with mode 600.
+   The token is saved beside the client with mode 600. It asks only for your events and
+   your calendar list (`calendar.events`, `calendar.calendarlist`): it can't delete a
+   calendar or change who it's shared with.
 
 Events sync every five minutes. You get a desktop notification ten minutes before
 each event. **+** adds an event to your primary calendar.
