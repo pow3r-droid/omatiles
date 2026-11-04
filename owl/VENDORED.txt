@@ -13,10 +13,17 @@ below was re-checked byte for byte against 37d9bac.
                          examples/feeds.owl examples/todo.owl (the examples Claude reads when it
                          writes a widget)
 
-The only local change: OwlWidget.qml gains `maxFps`, a frame-rate cap for animated widgets
-(0 keeps every frame; the desk sets 30). Redo it after re-vendoring:
+Two local changes. Redo both after re-vendoring.
+
+1. OwlWidget.qml gains `maxFps`, a frame-rate cap for animated widgets
+   (0 keeps every frame; the desk sets 30):
 
   property real maxFps: 0
   property real lastFrame: -1
   FrameAnimation { onRunningChanged: root.lastFrame = -1; onTriggered: skip when maxFps > 0 and
   elapsedTime - lastFrame < 1 / maxFps - 0.004, else set lastFrame = elapsedTime ... }
+
+2. Every `Text` in OwlNode.qml (3) and OwlTerminal.qml (3) gets `textFormat: Text.PlainText`. Qt
+   otherwise guesses rich text, and a feed or release title holding <img src=...> makes the desk
+   fetch that URL. LANGUAGE.md defines no markup, so nothing legitimate changes.
+   tests/model.test.cjs fails on any Text without a textFormat.

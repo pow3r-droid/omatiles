@@ -126,6 +126,7 @@ Rectangle {
     boundsBehavior: Flickable.StopAtBounds
     delegate: Text {
       required property int index
+      textFormat: Text.PlainText
       width: output.width
       text: root.lines[index] || " "
       color: root.widget ? root.widget.ink("foreground") : "white"
@@ -155,6 +156,7 @@ Rectangle {
         ]
         delegate: Text {
           required property var modelData
+          textFormat: Text.PlainText
           text: modelData.label
           color: root.widget ? root.widget.ink("accent") : "white"
           font.family: root.widget ? root.widget.monoFamily : "monospace"
@@ -191,6 +193,7 @@ Rectangle {
         if (root.widget) root.widget.host.fieldFocused(field.activeFocus)
       }
       Text {
+        textFormat: Text.PlainText
         anchors.fill: parent
         visible: field.text === "" && !field.activeFocus
         text: "$ tap to type"

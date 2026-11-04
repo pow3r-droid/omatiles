@@ -487,6 +487,7 @@ Item {
       implicitHeight: Math.max(1, label.lineCount) * textBox.line
       Text {
         id: label
+        textFormat: Text.PlainText
         width: parent.width
         anchors.verticalCenter: parent.verticalCenter
         text: root.p.text === undefined || root.p.text === null ? "\u2026" : String(root.p.text)
@@ -525,6 +526,7 @@ Item {
       }
       Text {
         id: label
+        textFormat: Text.PlainText
         anchors.centerIn: parent
         text: root.p.text === undefined || root.p.text === null ? "…" : String(root.p.text)
         color: root.p.color || (root.widget ? root.widget.ink("accent") : "white")
@@ -771,6 +773,7 @@ Item {
           if (root.p.clear === true) field.text = ""
         }
         Text {
+          textFormat: Text.PlainText
           anchors.fill: parent
           verticalAlignment: Text.AlignVCenter
           visible: field.text === ""

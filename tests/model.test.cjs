@@ -369,3 +369,18 @@ test('chat replies keep their Markdown but never fetch images or read tags', () 
     assert.equal(s(md), md);
 });
 
+test('every Text in the plugin reads plain text: DeskText, or an explicit textFormat', () => {
+  // Qt guesses rich text by default, and an <img> in a feed title or a release name would
+  // make the desk fetch it. The vendored OWL runtime included (see owl/VENDORED.txt).
+  const root = path.join(__dirname, '..'), bad = [];
+  for (const dir of ['.', 'owl', 'calendar']) for (const f of fs.readdirSync(path.join(root, dir))) {
+    if (!f.endsWith('.qml') || f === 'DeskText.qml') continue;
+    const lines = fs.readFileSync(path.join(root, dir, f), 'utf8').split('\n');
+    lines.forEach((l, i) => {
+      if (!/(^|[\s:])Text\s*\{/.test(l)) return;
+      if (!/textFormat\s*:/.test(lines.slice(i, i + 12).join('\n'))) bad.push(`${dir}/${f}:${i + 1}`);
+    });
+  }
+  assert.deepEqual(bad, []);
+  assert.match(fs.readFileSync(path.join(root, 'DeskText.qml'), 'utf8'), /textFormat:\s*Text\.PlainText/);
+});
