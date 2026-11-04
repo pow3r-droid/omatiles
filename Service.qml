@@ -293,6 +293,8 @@ Scope {
             var s = function(i) { return args[i] === undefined || args[i] === null ? "" : String(args[i]); };
             if (name === "copy" || name === "share") { root.copyText(s(0)); if (name === "share") root.notify("copied", s(0)); return; }
             if (name === "notify") { root.notify(s(0), s(1)); return; }
+            // A widget opens web links only, like chat and calendar links: no file:// or custom handlers.
+            if (name === "url") { root.openLink(s(0)); return; }
             defaultAct(widget, name, args);
         }
     }
