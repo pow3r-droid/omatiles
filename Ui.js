@@ -59,19 +59,12 @@ function nearestTheme(themes, have, bg, accent) {
 }
 
 // A chat reply is Markdown, and Qt fetches a Markdown image by itself: a reply shaped by a web
-// page could make the desk call any server with the conversation in the URL. Outside code,
-// images become ordinary links (opened only on a click) and tags show as text.
+// page could make the desk call any server with the conversation in the URL. An invisible
+// word joiner goes between every "!" and "[" and after every "<" that could open a tag, so no
+// image and no tag can form anywhere. This doesn't parse the Markdown: any guess about where
+// code starts and ends that differs from Qt's own parse is a way past the filter. Code looks the
+// same (the joiner has no width and allows no line break); an image becomes a link.
+var JOINER = '\u2060';
 function safeMarkdown(md) {
-    var fence = null;
-    return String(md).split('\n').map(function(line) {
-        var m = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-        if (fence) {
-            if (m && m[1][0] === fence[0] && m[1].length >= fence.length && !m[2].trim()) fence = null;
-            return line;
-        }
-        if (m) { fence = m[1]; return line; }
-        return line.replace(/(`+)[^`][\s\S]*?\1(?!`)|`+|!\[|<(?=[A-Za-z\/!?])/g, function(t) {
-            return t === '![' ? '\\![' : t === '<' ? '&lt;' : t;
-        });
-    }).join('\n');
+    return String(md).replace(/!(?=\[)|<(?=[A-Za-z\/!?])/g, function(t) { return t + JOINER; });
 }
